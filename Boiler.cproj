@@ -146,7 +146,13 @@
     <Compile Include="Core\TaskManager\TaskManager.h">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="Drivers\include\LCI.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="Drivers\include\WDT.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="Drivers\LCI.c">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="Drivers\WDT.c">

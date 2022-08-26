@@ -40,7 +40,7 @@ void wdt_init(const BYTE cycles) {
 /******************************************************************************/
 /** @fn wdt_start */
 void wdt_start(void) {
-    WDTCR |= BIT(WDE);							/* WatchDog enable */
+    WDTCR |= BIT(WDE);      /* WatchDog enable */
 }
 /******************************************************************************/
 /** @fn wdt_stop */
