@@ -11,6 +11,8 @@
 /****************************** Included files ********************************/
 #include "StateMachine.h" /* State Machine private header file */
 #include "bsp.h"
+#include "WDT.h"
+
 /******************************** Definition **********************************/
 enum descriptors {
     STATE_MACHINE = 1,
@@ -59,15 +61,52 @@ enum SM_ERRORS {
 /**************************** Private prototypes ******************************/
 
 /********************* Private State machine prototypes ***********************/
-
+void State_machine (void*);
 /**************************** Private  variables ******************************/
-
+static BYTE current_state = INIT_STAGE_1;
 /************************** Additional Definition *****************************/
 
 /************************************ API *************************************/
 void sm_start(WORD * const ptr_time) {  
     bsp_gpio_init();            /* Setting the GPIO in a safe condition */
     tm_init(ptr_time);          /* Reset and initialize the dispatcher */
+    wdt_init(WD_2048K_CYCLES);
     bsp_systimer_start();
+
+    tm_add_task(
+        STATE_MACHINE,
+        &State_machine,
+        &current_state,
+        PERIODIC_MODE,
+        500
+    );
 }
 /************************* State machine functions ****************************/
+void State_machine (void * ptr) {
+    BYTE * state = (BYTE *) ptr;
+    switch (*state) {
+/*----------------------------------------------------------------------------*/
+        case INIT_STAGE_1: {
+            wdt_start();
+
+            tm_add_task(
+                WATCHDOG,
+                &wd_throw_bone,
+                NULLPTR,
+                PERIODIC_MODE,
+                WDT_RST_PERIOD
+            );
+
+            *state = IDLE;
+            break; /* Release process */
+        }
+        case IDLE:
+            break;
+        case ERROR:
+            tm_kill_task(WATCHDOG);
+            break;
+        default:
+            *state = ERROR;
+/*----------------------------------------------------------------------------*/
+    }
+}

@@ -146,6 +146,12 @@
     <Compile Include="Core\TaskManager\TaskManager.h">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="Drivers\include\WDT.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="Drivers\WDT.c">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="Global\bsp.c">
       <SubType>compile</SubType>
     </Compile>
