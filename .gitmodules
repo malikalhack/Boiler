@@ -1,0 +1,7 @@
+[submodule "TaskManager"]
+	path = Core/TaskManager
+	url = https://github.com/malikalhack/TaskManagerLite.git
+	branch = development
+[submodule "Core/TaskManager"]
+	url = https://github.com/malikalhack/TaskManagerLite.git
+	branch = development

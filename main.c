@@ -10,12 +10,15 @@
 /******************************** Included files ******************************/
 #include "main.h"
 /****************************** Global variables ******************************/
-static unsigned int SysTime;	/* Time counter */
+static WORD SysTime;    /* Time counter */
 /******************************** Entry point *********************************/
 int main(void) {
-    SysTime = 0;		/* Time counter initialize */
+    SysTime = 0;        /* Time counter initialize */
+    sm_start(&SysTime); /* Start state machine */
+    sei();              /* Allow interrupts */
 /******************************* Endlessly loop *******************************/
-    while (1);
+    while (1) tm_run();
 /******************************************************************************/
 }
 
+ISR (TIMER0_COMP_vect) { SysTime++; } 

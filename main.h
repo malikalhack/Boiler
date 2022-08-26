@@ -10,7 +10,8 @@
 #ifndef MAIN_H_
 #define MAIN_H_
 /****************************** Included files ********************************/
-
+#include "Interruptions16.h" /* ATmega16 interrupt prototypes */
+#include "StateMachine.h" /* State Machine header file */
 /******************************** Definitions *********************************/
 
 /****************************** Global variables ******************************/
