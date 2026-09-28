@@ -11,7 +11,8 @@ SIZE        := avr-size
 CFLAGS      := -std=c11 -Wall -Wextra -Werror -mmcu=$(MCU) \
 			   -DF_CPU=$(F_CPU) -Ilib -Os
 LDFLAGS     := -mmcu=$(MCU) -Wl,-Map=$(BUILD_DIR)/$(TARGET).map \
-			   -Llib -lacrosched
+               
+LDLIBS      := -Llib -lacrosched
 
 SOURCE      := $(SRC_DIR)/main.c
 OBJECT      := $(BUILD_DIR)/main.o
@@ -26,7 +27,7 @@ $(HEX): $(ELF)
 	$(OBJCOPY) -O ihex -R .eeprom $< $@
 
 $(ELF): $(OBJECT) | $(BUILD_DIR)
-	$(CC) $(LDFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 $(OBJECT): $(SOURCE) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
