@@ -68,3 +68,18 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
 - Create the repository build files and integrate the locally built AcroSched
   library.
 - Start BSP implementation after confirming the electrical levels.
+
+## 2026-09-28
+
+### Development stages
+
+- Defined the staged implementation order: proportional CPC1008N control with
+  one DS18B20 and software 1-Wire; addition of the selectable DS2480B driver;
+  Modes 1 and 2 with the full two-sensor scope; then MOC30xx optotriac support
+  and power-stage review.
+- Defined Mode 3 as the initial single-channel mode for the first heating
+  channel and Mode 4 as the sensor-configuration service mode. Mode 4 assigns
+  DS18B20 ROM codes to physical locations and stores the confirmed assignment
+  in EEPROM.
+- Corrected the AcroSched description: it is built locally from its external
+  source project with the same AVR-GCC toolchain as Boiler.

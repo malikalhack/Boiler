@@ -39,6 +39,26 @@ AcroSched is built from its sources on the same machine and with the same
 AVR-GCC toolchain as the firmware. Record its exact library file, headers,
 compiler options, include path, and linker options in the build documentation.
 
+## 1.2. Development Stages
+
+Development is incremental. Each stage must be buildable and testable before
+the next hardware or operating-mode scope is added.
+
+1. Implement a proportional temperature controller using CPC1008N outputs,
+  one DS18B20 sensor, and software 1-Wire. This stage covers the single-
+  channel first-circuit operation represented by Mode 3.
+2. Add the DS2480B sensor driver while retaining software 1-Wire as an
+  alternative build configuration. The two drivers remain mutually
+  exclusive; proportional control and the single-channel scope are unchanged.
+3. Add the remaining operating scope, including Modes 1 and 2 and the
+  associated two-sensor behavior.
+4. Add MOC30xx optotriac support. Resolve the power-stage, synchronization,
+  and any required schematic questions at this stage.
+
+The CPC1008N and software 1-Wire stages are the initial firmware and bench-
+testing target. MOC30xx support is intentionally excluded from the first
+three stages.
+
 ## 2. Hardware Configuration
 
 ### 2.1. MCU and Clock
@@ -183,8 +203,17 @@ never be enabled in the same build.
 
 ## 3. Sensors and ROM Assignment
 
-Both DS18B20 devices share one 1-Wire bus. The physical installation point is
-defined by the complete 64-bit ROM code, never by Search ROM discovery order.
+The configuration contains an operating profile that determines how many
+DS18B20 sensors and heating channels are required. The supported profiles are:
+
+```text
+SINGLE_CHANNEL -> SENSOR_1 is required; SENSOR_2 is unused
+TWO_CHANNEL    -> SENSOR_1 and SENSOR_2 are required
+```
+
+In both profiles, the physical installation point is defined by the complete
+64-bit ROM code, never by Search ROM discovery order. Both DS18B20 devices,
+when present, share one 1-Wire bus.
 
 The configuration stores two assignments:
 
@@ -193,18 +222,18 @@ SENSOR_1 -> ROM code of the sensor at location/circuit 1
 SENSOR_2 -> ROM code of the sensor at location/circuit 2
 ```
 
-Normal operation must address each sensor with Match ROM. Discovery order must
-never be used to map a sensor to a physical location.
+`SENSOR_2` is unused and has no valid ROM value in the `SINGLE_CHANNEL`
+profile. Normal operation must address each configured sensor with Match ROM.
+Discovery order must never be used to map a sensor to a physical location.
 
 Before heating is enabled, verify:
 
 - EEPROM configuration validity;
-- family code and ROM CRC for both stored ROM codes;
-- the two ROM codes are different;
-- both assigned sensors are present on the bus;
-- no unknown device is present when exactly two sensors are required;
-- scratchpad CRC for both sensors;
-- a valid temperature reading from both sensors.
+- the family code and ROM CRC for every stored ROM code;
+- the required assigned sensors are present on the bus;
+- no unknown or extra device is present for the selected profile;
+- scratchpad CRC for every required sensor;
+- a valid temperature reading from every required sensor.
 
 Any failure disables both heater outputs.
 
@@ -221,6 +250,7 @@ format_version
 sequence
 sensor_1_rom[8]
 sensor_2_rom[8]
+operating_profile
 application_settings
 crc
 commit_marker
@@ -242,6 +272,7 @@ The following states are invalid:
 - unknown format version;
 - CRC failure;
 - incomplete record;
+- missing or invalid ROM code required by the selected profile;
 - duplicate ROM codes;
 - incomplete sensor assignment.
 
@@ -258,18 +289,36 @@ combination and service procedure are being evaluated.
 
 ### 5.2. Assignment Sequence
 
+The user selects the operating profile before assigning sensors.
+
+For `SINGLE_CHANNEL`:
+
 ```text
-S1?    disconnect the sensor at location 2, press Enter
-S1OK   keep the first ROM code in temporary RAM
-S2?    disconnect the sensor at location 1, press Enter
-S2OK   keep the second ROM code in temporary RAM
-CHECK  connect both sensors, press Enter
-SAVE?  confirm the EEPROM write with Enter
-DONE   verify the record and restart
+PROFILE  select single-channel profile, press Enter
+S1?      connect only the sensor at location 1, press Enter
+S1OK     keep the ROM code in temporary RAM
+CHECK    verify the single connected sensor, press Enter
+SAVE?    confirm the EEPROM write with Enter
+DONE     verify the record and restart
 ```
 
-Exactly one suitable device must be found during each S1 and S2 step. `Enter`
-is required before each measurement and before committing the EEPROM record.
+For `TWO_CHANNEL`:
+
+```text
+PROFILE  select two-channel profile, press Enter
+S1?      disconnect the sensor at location 2, press Enter
+S1OK     keep the first ROM code in temporary RAM
+S2?      disconnect the sensor at location 1, press Enter
+S2OK     keep the second ROM code in temporary RAM
+CHECK    connect both sensors, press Enter
+SAVE?    confirm the EEPROM write with Enter
+DONE     verify the record and restart
+```
+
+Exactly the number of suitable devices required by the selected profile must
+be found during each assignment step. `Enter` is required before each
+measurement and before committing the EEPROM record. A single-channel
+configuration does not make Modes 1 and 2 available.
 
 The new ROM codes must not replace the active configuration before the complete
 procedure succeeds. If the procedure is interrupted, the previous valid
@@ -316,6 +365,8 @@ startup while retaining the other causes in diagnostic state.
 
 ### Mode 1: Two Independent Circuits
 
+Mode 1 is available only with the `TWO_CHANNEL` profile.
+
 - Channel 1 controls the high-temperature closed heating circuit.
 - Channel 2 controls user water according to its configured temperature.
 - Each channel has its own sensor and output.
@@ -323,6 +374,8 @@ startup while retaining the other causes in diagnostic state.
   control rules that must be finalized before implementing the control module.
 
 ### Mode 2: Two-Tank Boiler
+
+Mode 2 is available only with the `TWO_CHANNEL` profile.
 
 - Each channel controls its own heater.
 - The tanks are not isolated and normally have similar temperatures.
@@ -359,9 +412,23 @@ startup while retaining the other causes in diagnostic state.
 - The configured difference limit is stored in the validated EEPROM
   application settings.
 
-### Modes 3 and 4
+### Mode 3: Single First Channel
 
-Reserved. They remain unavailable in the user interface until specified.
+Mode 3 controls only the first heating channel using one DS18B20 sensor. It
+is the initial single-channel operating mode for the proportional CPC1008N
+implementation. It is available with the `SINGLE_CHANNEL` profile; the second
+sensor and second heater remain unused. The mode may also be available with a
+`TWO_CHANNEL` profile, but it still uses only SENSOR_1 and channel 1.
+
+### Mode 4: Sensor Configuration
+
+Mode 4 is the sensor-configuration service mode. It selects the operating
+profile, discovers the required DS18B20 devices, assigns their complete ROM
+codes to the physical locations, and saves the confirmed assignment in EEPROM
+for subsequent operation. The procedure is defined in Section 5. Heating
+remains disabled throughout the procedure. If the procedure is interrupted or
+fails, the previous valid configuration remains unchanged; without a previous
+valid configuration, the device returns to `CONFIG_INVALID`.
 
 ### User Interface Displays
 
@@ -371,7 +438,7 @@ Reserved. They remain unavailable in the user interface until specified.
 - Pressing `Left` or `Right` selects the corresponding channel and holds its
   temperature on the display for 5 seconds without automatic switching.
 - After the 5-second hold expires, Mode 2 resumes alternating both channels.
-- In reserved modes, the display shows dashes.
+- In any future reserved mode, the display shows dashes.
 - The sensor-assignment service uses the dedicated service screens defined in
   Section 5.
 
@@ -390,9 +457,10 @@ Reserved. They remain unavailable in the user interface until specified.
 
 ## 9. AcroSched Constraints
 
-AcroSched 2.2.0 is used as a prebuilt binary library with public header files.
-AcroSched source files are not included in the Boiler repository. The library
-and headers may be distributed with the project.
+AcroSched 2.2.0 is built locally from its sources with the same AVR-GCC
+toolchain as the Boiler firmware. The AcroSched source tree is maintained as
+an external project and is not included in the Boiler repository. Its built
+library and public headers are integrated into the Boiler build.
 
 Initial library configuration:
 
