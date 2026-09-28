@@ -9,8 +9,9 @@ OBJCOPY     := avr-objcopy
 SIZE        := avr-size
 
 CFLAGS      := -std=c11 -Wall -Wextra -Werror -mmcu=$(MCU) \
-               -DF_CPU=$(F_CPU) -Os
-LDFLAGS     := -mmcu=$(MCU) -Wl,-Map=$(BUILD_DIR)/$(TARGET).map
+			   -DF_CPU=$(F_CPU) -Ilib -Os
+LDFLAGS     := -mmcu=$(MCU) -Wl,-Map=$(BUILD_DIR)/$(TARGET).map \
+			   -Llib -lacrosched
 
 SOURCE      := $(SRC_DIR)/main.c
 OBJECT      := $(BUILD_DIR)/main.o
