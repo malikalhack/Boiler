@@ -3,19 +3,20 @@ F_CPU       := 14745600UL
 TARGET      := boiler
 BUILD_DIR   := output
 SRC_DIR     := src
+BSP_DIR     := bsp
 
 CC          := avr-gcc
 OBJCOPY     := avr-objcopy
 SIZE        := avr-size
 
 CFLAGS      := -std=c11 -Wall -Wextra -Werror -mmcu=$(MCU) \
-			   -DF_CPU=$(F_CPU) -Ilib -Os
+			   -DF_CPU=$(F_CPU) -Ilib -I$(BSP_DIR) -Os
 LDFLAGS     := -mmcu=$(MCU) -Wl,-Map=$(BUILD_DIR)/$(TARGET).map \
                
 LDLIBS      := -Llib -lacrosched
 
-SOURCE      := $(SRC_DIR)/main.c
-OBJECT      := $(BUILD_DIR)/main.o
+SOURCES     := $(SRC_DIR)/main.c $(BSP_DIR)/bsp.c
+OBJECTS     := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SOURCES))
 ELF         := $(BUILD_DIR)/$(TARGET).elf
 HEX         := $(BUILD_DIR)/$(TARGET).hex
 
@@ -26,10 +27,12 @@ all: $(HEX)
 $(HEX): $(ELF)
 	$(OBJCOPY) -O ihex -R .eeprom $< $@
 
-$(ELF): $(OBJECT) | $(BUILD_DIR)
+
+$(ELF): $(OBJECTS) | $(BUILD_DIR)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-$(OBJECT): $(SOURCE) | $(BUILD_DIR)
+$(BUILD_DIR)/%.o: %.c
+	mkdir -p $(@D)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR):

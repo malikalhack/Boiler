@@ -1,4 +1,5 @@
 /**
+ * @copyright @showdate "%Y " Anton Chernov. All rights reserved.
  * @file    main.c
  * @version 0.2.0
  * @authors Anton Chernov
@@ -8,6 +9,7 @@
 
 /******************************** Included files ******************************/
 #include "acrosched.h"
+#include "bsp.h"
 
 /****************************** Module variables ******************************/
 static volatile AcroTick_t system_tick = 0U;
@@ -17,6 +19,8 @@ static volatile AcroTick_t system_tick = 0U;
 /** @fn main */
 int main(void) {
     EAcroStatus_t status;
+
+    bspInit();
 
     status = acroInit(&system_tick);
     if (status != eAcroOk) {
