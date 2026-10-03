@@ -1,0 +1,81 @@
+{
+    "version": "1.9",
+    "configurations": [
+        {
+            "name": "boiler",
+            "id": "",
+            "device": "ATmega16A",
+            "imagePath": "./output/mplab/boiler.elf",
+            "toolProperties": "boiler-tool-base",
+            "tool": "Simulator",
+            "packs": [
+                {
+                    "name": "ATmega_DFP",
+                    "vendor": "Microchip",
+                    "version": "3.6.299"
+                }
+            ],
+            "fileSet": "default",
+            "toolchain": "toolchain AVR-GCC 5.4.0",
+            "userVariables": "boiler-uservariables"
+        }
+    ],
+    "propertyGroups": [
+        {
+            "name": "boiler-uservariables",
+            "type": "uservariables",
+            "properties": {}
+        },
+        {
+            "name": "toolchain AVR-GCC 5.4.0",
+            "extend": "",
+            "type": "toolchain",
+            "provider": "microchip.toolchains:avr-gcc@7.3.0",
+            "properties": {
+                "compiler.extra-include-directories": [
+                    "/home/malik/03_Programs/AVRStudio/Boiler/inc",
+                    "/home/malik/03_Programs/AVRStudio/Boiler/lib",
+                    "/home/malik/03_Programs/AVRStudio/Boiler/bsp"
+                ],
+                "compiler.preprocessor-macros": [
+                    "F_CPU=14745600UL"
+                ],
+                "linker.extra-lib-directories": [
+                    "/home/malik/03_Programs/AVRStudio/Boiler/lib"
+                ],
+                "assembler-pre.include-paths": [
+                    "/home/malik/03_Programs/AVRStudio/Boiler/src"
+                ],
+                "global.omit-pack-options": false,
+                "compiler.default-char-type": true,
+                "compiler.default-bitfield-type": true,
+                "compiler.garbage-collect-data": true,
+                "compiler++.default-char-type": true,
+                "compiler++.default-bitfield-type": true,
+                "compiler++.garbage-collect-data": true
+            }
+        },
+        {
+            "name": "default-AVR-GCC",
+            "type": "toolchain",
+            "provider": "microchip.toolchains:avr-gcc@5.4.0",
+            "properties": {}
+        },
+        {
+            "name": "boiler-tool-base",
+            "type": "tool",
+            "properties": {}
+        }
+    ],
+    "fileSets": [
+        {
+            "name": "default",
+            "files": [
+                "src/**/*",
+                "bsp/**/*",
+                "inc/**/*",
+                "lib/**/*"
+            ]
+        }
+    ]
+}
