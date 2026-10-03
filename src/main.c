@@ -12,9 +12,8 @@
 #include "bsp.h"
 
 /****************************** Module variables ******************************/
-static volatile AcroTick_t system_tick = 0U;
 
-/********************* Application Programming Interface *********************/
+/********************** Application Programming Interface *********************/
 
 /** @fn main */
 int main(void) {
@@ -22,11 +21,12 @@ int main(void) {
 
     bspInit();
 
-    status = acroInit(&system_tick);
+    status = acroInit(bspGetTick());
     if (status != eAcroOk) {
         for (;;) {}
     }
 
+    bspStart();
     (void)acroRun();
 
     for (;;) {}

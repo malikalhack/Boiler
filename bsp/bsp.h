@@ -10,6 +10,9 @@
 #ifndef BSP_H
 #define BSP_H
 
+/******************************** Included files ******************************/
+#include "acrosched.h"
+
 /********************************* Definitions ********************************/
 
 /**
@@ -25,6 +28,12 @@ typedef enum EBspHeater {
 
 /** @fn bspInit */
 void bspInit(void);
+
+/** @fn bspGetTick */
+volatile AcroTick_t *bspGetTick(void);
+
+/** @fn bspStart */
+void bspStart(void);
 
 /** @fn bspHeaterOn */
 void bspHeaterOn(EBspHeater_t heater);

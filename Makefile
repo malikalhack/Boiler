@@ -1,9 +1,9 @@
 MCU         := atmega16a
-F_CPU       := 14745600UL
 TARGET      := boiler
 BUILD_DIR   := output
 SRC_DIR     := src
 BSP_DIR     := bsp
+INC_DIR     := inc
 OPT_FLAGS   ?= -Os
 
 CC          := avr-gcc
@@ -11,8 +11,11 @@ OBJCOPY     := avr-objcopy
 SIZE        := avr-size
 
 CFLAGS      := -std=c11 -Wall -Wextra -Werror -mmcu=$(MCU) \
-               -DF_CPU=$(F_CPU) -Ilib -I$(BSP_DIR) $(OPT_FLAGS)
-LDFLAGS     := -mmcu=$(MCU) -Wl,-Map=$(BUILD_DIR)/$(TARGET).map
+			   -I$(INC_DIR) -Ilib -I$(BSP_DIR) \
+			   -include $(INC_DIR)/boiler_config.h $(OPT_FLAGS) \
+			   -ffunction-sections -fdata-sections
+LDFLAGS     := -mmcu=$(MCU) -Wl,-Map=$(BUILD_DIR)/$(TARGET).map \
+			   -Wl,--gc-sections
 LDLIBS      := -Llib -lacrosched
 
 SOURCES     := $(SRC_DIR)/main.c $(BSP_DIR)/bsp.c
@@ -22,7 +25,7 @@ HEX         := $(BUILD_DIR)/$(TARGET).hex
 
 .PHONY: all clean debug size
 
-all: $(HEX)
+all: $(HEX) size
 
 $(HEX): $(ELF)
 	$(OBJCOPY) -O ihex -R .eeprom $< $@
