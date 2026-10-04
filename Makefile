@@ -18,7 +18,8 @@ LDFLAGS     := -mmcu=$(MCU) -Wl,-Map=$(BUILD_DIR)/$(TARGET).map \
 			   -Wl,--gc-sections
 LDLIBS      := -Llib -lacrosched
 
-SOURCES     := $(SRC_DIR)/main.c $(BSP_DIR)/bsp.c
+SOURCES     := $(SRC_DIR)/main.c $(SRC_DIR)/boiler_storage.c \
+			   $(BSP_DIR)/bsp.c
 OBJECTS     := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SOURCES))
 ELF         := $(BUILD_DIR)/$(TARGET).elf
 HEX         := $(BUILD_DIR)/$(TARGET).hex

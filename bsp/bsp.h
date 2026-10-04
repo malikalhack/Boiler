@@ -9,10 +9,11 @@
 
 #ifndef BSP_H
 #define BSP_H
-
 /******************************** Included files ******************************/
-#include "acrosched.h"
+#include <stdbool.h>
+#include <stdint.h>
 
+#include "acrosched.h"
 /********************************* Definitions ********************************/
 
 /**
@@ -24,21 +25,58 @@ typedef enum EBspHeater {
     eBspHeater2 = 1
 } EBspHeater_t;
 
-/********************* Application Programming Interface *********************/
+/********************** Application Programming Interface *********************/
 
-/** @fn bspInit */
+/**
+ * @brief Configure the board ports, system timer, and timer interrupt.
+ */
 void bspInit(void);
 
-/** @fn bspGetTick */
+/**
+ * @brief Return a pointer to the system tick counter.
+ * @returns Pointer to the volatile system tick counter.
+ */
 volatile AcroTick_t *bspGetTick(void);
 
-/** @fn bspStart */
+/**
+ * @brief Enable global interrupts.
+ */
 void bspStart(void);
 
-/** @fn bspHeaterOn */
+/**
+ * @brief Enable the selected heater output.
+ * @param[in] heater Heater output to enable.
+ */
 void bspHeaterOn(EBspHeater_t heater);
 
-/** @fn bspHeaterOff */
+/**
+ * @brief Disable the selected heater output.
+ * @param[in] heater Heater output to disable.
+ */
 void bspHeaterOff(EBspHeater_t heater);
 
+/**
+ * @brief Read a range of bytes from EEPROM.
+ * @param[in] address First EEPROM address to read.
+ * @param[out] data Destination buffer.
+ * @param[in] size Number of bytes to read.
+ * @returns true if the read succeeds; otherwise false.
+ */
+bool bspEepromRead(uint16_t address, uint8_t *data, uint16_t size);
+
+/**
+ * @brief Update EEPROM bytes without rewriting unchanged values.
+ * @param[in] address First EEPROM address to update.
+ * @param[in] data Source buffer.
+ * @param[in] size Number of bytes to update.
+ * @returns true if the update succeeds; otherwise false.
+ */
+bool bspEepromUpdate(uint16_t address, const uint8_t *data, uint16_t size);
+
+/**
+ * @brief Return the EEPROM capacity in bytes.
+ * @returns EEPROM capacity in bytes.
+ */
+uint16_t bspEepromSize(void);
+/******************************************************************************/
 #endif // !BSP_H
