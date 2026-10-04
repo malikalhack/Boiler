@@ -63,5 +63,5 @@
 #if (F_CPU != BOILER_CPU_HZ)
 #error "F_CPU does not match BOILER_CPU_HZ"
 #endif
-
+/******************************************************************************/
 #endif // !BOILER_CONFIG_H

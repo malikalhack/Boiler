@@ -9,10 +9,8 @@
 
 /******************************** Included files ******************************/
 #include "acrosched.h"
+#include "boiler_storage.h"
 #include "bsp.h"
-
-/****************************** Module variables ******************************/
-
 /********************** Application Programming Interface *********************/
 
 /** @fn main */
@@ -20,6 +18,7 @@ int main(void) {
     EAcroStatus_t status;
 
     bspInit();
+    (void)boilerStorageInit();
 
     status = acroInit(bspGetTick());
     if (status != eAcroOk) {

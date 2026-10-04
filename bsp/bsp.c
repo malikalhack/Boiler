@@ -8,6 +8,7 @@
  */
 
 /******************************** Included files ******************************/
+#include <avr/eeprom.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
@@ -15,36 +16,96 @@
 #include "bsp.h"
 
 /********************************* Definitions ********************************/
+
+/**
+ * @def BSP_SEGMENT_MASK
+ * @brief Data bus pins connected to the display segments.
+ */
 #define BSP_SEGMENT_MASK    (0xFFU)
+/**
+ * @def BSP_DIGIT_MASK
+ * @brief Port B pins used to select the display digits.
+ */
 #define BSP_DIGIT_MASK      (_BV(PB0) | _BV(PB1) | _BV(PB2) | \
                              _BV(PB3) | _BV(PB4))
+/**
+ * @def BSP_BUTTON_MASK
+ * @brief Port C pins connected to the user buttons.
+ */
 #define BSP_BUTTON_MASK     (_BV(PC3) | _BV(PC4) | _BV(PC5) | \
                              _BV(PC6) | _BV(PC7))
+/**
+ * @def BSP_BUZZER_MASK
+ * @brief Port C pin connected to the buzzer output.
+ */
 #define BSP_BUZZER_MASK     (_BV(PC2))
+/**
+ * @def BSP_HEATER_1_MASK
+ * @brief Port D pin controlling heater output 1.
+ */
 #define BSP_HEATER_1_MASK   (_BV(PD5))
+/**
+ * @def BSP_HEATER_2_MASK
+ * @brief Port D pin controlling heater output 2.
+ */
 #define BSP_HEATER_2_MASK   (_BV(PD4))
+/**
+ * @def BSP_HEATER_MASK
+ * @brief Port D pins controlling both heater outputs.
+ */
 #define BSP_HEATER_MASK     (BSP_HEATER_1_MASK | BSP_HEATER_2_MASK)
+/**
+ * @def BSP_SYNC_MASK
+ * @brief Port D pin connected to the zero-cross synchronization input.
+ */
 #define BSP_SYNC_MASK       (_BV(PD3))
-#define BSP_TIMER1_PRESCALER (8UL)
+/**
+ * @def BSP_TIM1_PRESCALER
+ * @brief Timer1 clock prescaler used for the system tick.
+ */
+#define BSP_TIM1_PRESCALER  (8UL)
 
 /**
  * @def BSP_TIMER1_COMPARE_VALUE
  * @brief Timer1 compare value for an approximately 1 ms system tick.
  */
 #define BSP_TIMER1_COMPARE_VALUE \
-    ((F_CPU / BSP_TIMER1_PRESCALER / BOILER_TICK_HZ) - 1UL)
+    ((F_CPU / BSP_TIM1_PRESCALER / BOILER_TICK_HZ) - 1UL)
 
 /****************************** Module variables ******************************/
 
+/**
+ * @var system_tick
+ * @brief System tick counter incremented by the Timer1 compare interrupt.
+ */
 static volatile AcroTick_t system_tick = 0U;
 
 /***************************** Private prototypes *****************************/
+/**
+ * @brief Configure the board GPIO directions and output levels.
+ */
 static void bspConfigPorts(void);
-static void bspConfigSysTimer(void);
-static void bspConfigInts(void);
-/***************************** Private functions *****************************/
 
-/** @fn bspConfigPorts */
+/**
+ * @brief Configure Timer1 for the system tick period.
+ */
+static void bspConfigSysTimer(void);
+
+/**
+ * @brief Enable the Timer1 compare interrupt and start the timer.
+ */
+static void bspConfigInts(void);
+
+/**
+ * @brief Check whether an EEPROM range fits within the device capacity.
+ * @param[in] address First EEPROM address in the range.
+ * @param[in] size Number of bytes in the range.
+ * @returns true if the non-empty range is within EEPROM bounds.
+ */
+static bool bspEepromRangeValid(uint16_t address, uint16_t size);
+
+/****************************** Private functions *****************************/
+
 static void bspConfigPorts(void) {
     PORTA = 0U;
     DDRA = BSP_SEGMENT_MASK;
@@ -61,7 +122,6 @@ static void bspConfigPorts(void) {
 
 /*----------------------------------------------------------------------------*/
 
-/** @fn bspConfigSysTimer */
 static void bspConfigSysTimer(void) {
     TCCR1A = 0U;
     TCCR1B = 0U;
@@ -71,12 +131,13 @@ static void bspConfigSysTimer(void) {
 
 /*----------------------------------------------------------------------------*/
 
-/** @fn bspConfigInts */
 static void bspConfigInts(void) {
     TIFR |= _BV(OCF1A);
     TIMSK |= _BV(OCIE1A);
     TCCR1B = _BV(WGM12) | _BV(CS11);
 }
+
+/*----------------------------------------------------------------------------*/
 
 static uint8_t bspGetHeatMask(EBspHeater_t heater) {
     uint8_t heater_mask;
@@ -96,32 +157,36 @@ static uint8_t bspGetHeatMask(EBspHeater_t heater) {
     return heater_mask;
 }
 
-/********************* Application Programming Interface *********************/
+/*----------------------------------------------------------------------------*/
 
-/** @fn bspInit */
+static bool bspEepromRangeValid(uint16_t address, uint16_t size) {
+    uint32_t end_address;
+    uint32_t eeprom_size;
+
+    end_address = (uint32_t)address + size;
+    eeprom_size = (uint32_t)E2END + 1UL;
+    return (size != 0U) && (end_address <= eeprom_size);
+}
+
+/********************** Application Programming Interface *********************/
+
 void bspInit(void) {
     bspConfigPorts();
     bspConfigSysTimer();
     bspConfigInts();
 }
-
 /*----------------------------------------------------------------------------*/
 
-/** @fn bspGetTick */
 volatile AcroTick_t *bspGetTick(void) {
     return &system_tick;
 }
-
 /*----------------------------------------------------------------------------*/
 
-/** @fn bspStart */
 void bspStart(void) {
     sei();
 }
-
 /*----------------------------------------------------------------------------*/
 
-/** @fn bspHeaterOn */
 void bspHeaterOn(EBspHeater_t heater) {
     uint8_t heater_mask;
 
@@ -131,10 +196,8 @@ void bspHeaterOn(EBspHeater_t heater) {
         DDRD |= heater_mask;
     }
 }
-
 /*----------------------------------------------------------------------------*/
 
-/** @fn bspHeaterOff */
 void bspHeaterOff(EBspHeater_t heater) {
     uint8_t heater_mask;
 
@@ -144,10 +207,39 @@ void bspHeaterOff(EBspHeater_t heater) {
         DDRD |= heater_mask;
     }
 }
-
 /*----------------------------------------------------------------------------*/
 
-/** @fn TIMER1_COMPA_vect */
+bool bspEepromRead(uint16_t address, uint8_t *data, uint16_t size) {
+    bool success;
+
+    success = false;
+    if ((data != NULL) && bspEepromRangeValid(address, size)) {
+        eeprom_read_block(data, (const void *)(uintptr_t)address, size);
+        success = true;
+    }
+
+    return success;
+}
+/*----------------------------------------------------------------------------*/
+
+bool bspEepromUpdate(uint16_t address, const uint8_t *data, uint16_t size) {
+    bool success;
+
+    success = false;
+    if ((data != NULL) && bspEepromRangeValid(address, size)) {
+        eeprom_update_block(data, (void *)(uintptr_t)address, size);
+        success = true;
+    }
+
+    return success;
+}
+/*----------------------------------------------------------------------------*/
+
+uint16_t bspEepromSize(void) {
+    return (uint16_t)(E2END + 1U);
+}
+/*----------------------------------------------------------------------------*/
+
 ISR(TIMER1_COMPA_vect) {
     system_tick++;
 }
