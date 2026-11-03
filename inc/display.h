@@ -1,0 +1,91 @@
+/**
+ * @copyright @showdate "%Y " Anton Chernov. All rights reserved.
+ * @file    display.h
+ * @version 0.1.0
+ * @authors Anton Chernov
+ * @date    2026-11-03
+ * @date    @showdate "%Y-%m-%d"
+ */
+
+#ifndef DISPLAY_H
+#define DISPLAY_H
+
+/******************************** Included files ******************************/
+#include <stdint.h>
+
+#include "errors.h"
+/********************************* Definitions ********************************/
+
+/**
+ * @def DISPLAY_DIGITS
+ * @brief Number of seven-segment digits, in K1 to K4 order.
+ */
+#define DISPLAY_DIGITS (4U)
+
+/**
+ * @def DISPLAY_SLOTS
+ * @brief Number of bus slots: four digits followed by the LED bank.
+ */
+#define DISPLAY_SLOTS (DISPLAY_DIGITS + 1U)
+
+/**
+ * @enum EDisplayGlyph
+ * @brief Active-high glyphs with A..G on bits 0..6 and DP on bit 7.
+ */
+typedef enum EDisplayGlyph {
+    eGlyphBlank = 0x00,
+    eGlyph0     = 0x3F,
+    eGlyph1     = 0x06,
+    eGlyph2     = 0x5B,
+    eGlyph3     = 0x4F,
+    eGlyph4     = 0x66,
+    eGlyph5     = 0x6D,
+    eGlyph6     = 0x7D,
+    eGlyph7     = 0x07,
+    eGlyph8     = 0x7F,
+    eGlyph9     = 0x6F,
+    eGlyphDash  = 0x40,
+    eGlyphE     = 0x79,
+    eGlyphPoint = 0x80
+} EDisplayGlyph_t;
+
+/**
+ * @struct SDisplayFrame
+ * @brief Raw digit segments and LED bits sharing the PA0..PA7 bus.
+ */
+typedef struct SDisplayFrame {
+    uint8_t slots[DISPLAY_SLOTS];
+} SDisplayFrame_t;
+
+/********************** Application Programming Interface *********************/
+/**
+ * @brief Reset scanning to K1, disable selections, and queue four dashes.
+ * @details Call before starting the cooperative scheduler.
+ */
+void display_init(void);
+
+/**
+ * @brief Queue a complete frame for the next K1 slot.
+ * @details Call only from cooperative tasks, not interrupt handlers.
+ * Replaces any frame not yet displayed; digit and LED data latch together.
+ * @param[in] frame Bus bytes in K1..K5 order; the last byte drives LEDs.
+ */
+void display_set_frame(SDisplayFrame_t frame);
+
+/**
+ * @brief Queue an E001..E009 screen while preserving the pending LED byte.
+ * @param[in] error Application error code to display.
+ * @returns eResultOk if queued; eResultInvalidArgument for zero/unknown codes.
+ * @details Invalid codes leave the pending frame unchanged.
+ * Call only from startup or cooperative tasks, not interrupt handlers.
+ */
+EResult_t display_show_error(EError_t error);
+
+/**
+ * @brief Output one slot and advance cyclically from K1 through K5.
+ * @details Call every system tick from the cooperative scheduler.
+ * @param[in] context Unused scheduler parameter.
+ */
+void display_scan(void *context);
+/******************************************************************************/
+#endif // !DISPLAY_H

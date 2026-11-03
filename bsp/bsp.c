@@ -187,6 +187,13 @@ void bspStart(void) {
 }
 /*----------------------------------------------------------------------------*/
 
+void bsp_display_write(uint8_t segments, uint8_t select_mask) {
+    PORTB &= (uint8_t)~BSP_DIGIT_MASK;
+    PORTA = segments;
+    PORTB |= select_mask & BSP_DIGIT_MASK;
+}
+/*----------------------------------------------------------------------------*/
+
 void bspHeaterOn(EBspHeater_t heater) {
     uint8_t heater_mask;
 
@@ -209,29 +216,35 @@ void bspHeaterOff(EBspHeater_t heater) {
 }
 /*----------------------------------------------------------------------------*/
 
-bool bspEepromRead(uint16_t address, uint8_t *data, uint16_t size) {
-    bool success;
+EResult_t bspEepromRead(uint16_t address, uint8_t *data, uint16_t size) {
+    EResult_t ret_val;
 
-    success = false;
-    if ((data != NULL) && bspEepromRangeValid(address, size)) {
-        eeprom_read_block(data, (const void *)(uintptr_t)address, size);
-        success = true;
+    ret_val = eResultInvalidArgument;
+    if ((data != NULL) && (size != 0U)) {
+        ret_val = eResultOutOfRange;
+        if (bspEepromRangeValid(address, size)) {
+            eeprom_read_block(data, (const void *)(uintptr_t)address, size);
+            ret_val = eResultOk;
+        }
     }
 
-    return success;
+    return ret_val;
 }
 /*----------------------------------------------------------------------------*/
 
-bool bspEepromUpdate(uint16_t address, const uint8_t *data, uint16_t size) {
-    bool success;
+EResult_t bspEepromUpdate(uint16_t address, const uint8_t *data, uint16_t size) {
+    EResult_t ret_val;
 
-    success = false;
-    if ((data != NULL) && bspEepromRangeValid(address, size)) {
-        eeprom_update_block(data, (void *)(uintptr_t)address, size);
-        success = true;
+    ret_val = eResultInvalidArgument;
+    if ((data != NULL) && (size != 0U)) {
+        ret_val = eResultOutOfRange;
+        if (bspEepromRangeValid(address, size)) {
+            eeprom_update_block(data, (void *)(uintptr_t)address, size);
+            ret_val = eResultOk;
+        }
     }
 
-    return success;
+    return ret_val;
 }
 /*----------------------------------------------------------------------------*/
 

@@ -9,6 +9,7 @@ OPT_FLAGS   ?= -Os
 CC          := avr-gcc
 OBJCOPY     := avr-objcopy
 SIZE        := avr-size
+HOST_CC     ?= cc
 
 CFLAGS      := -std=c11 -Wall -Wextra -Werror -mmcu=$(MCU) \
 			   -I$(INC_DIR) -Ilib -I$(BSP_DIR) \
@@ -18,13 +19,14 @@ LDFLAGS     := -mmcu=$(MCU) -Wl,-Map=$(BUILD_DIR)/$(TARGET).map \
 			   -Wl,--gc-sections
 LDLIBS      := -Llib -lacrosched
 
-SOURCES     := $(SRC_DIR)/main.c $(SRC_DIR)/boiler_storage.c \
+SOURCES     := $(SRC_DIR)/main.c $(SRC_DIR)/storage.c \
+			   $(SRC_DIR)/display.c \
 			   $(BSP_DIR)/bsp.c
 OBJECTS     := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SOURCES))
 ELF         := $(BUILD_DIR)/$(TARGET).elf
 HEX         := $(BUILD_DIR)/$(TARGET).hex
 
-.PHONY: all clean debug size
+.PHONY: all clean debug size test
 
 all: $(HEX) size
 
@@ -50,3 +52,14 @@ clean:
 
 debug: clean
 	$(MAKE) OPT_FLAGS="-Og -g3" all size
+
+test:
+	mkdir -p $(BUILD_DIR)/tests
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Itests/stubs -I$(INC_DIR) -Ilib \
+		-I$(BSP_DIR) tests/display_test.c $(SRC_DIR)/display.c \
+		-o $(BUILD_DIR)/tests/display_test
+	$(BUILD_DIR)/tests/display_test
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Itests/stubs -I$(INC_DIR) -Ilib \
+		-I$(BSP_DIR) tests/storage_test.c $(SRC_DIR)/storage.c \
+		-o $(BUILD_DIR)/tests/storage_test
+	$(BUILD_DIR)/tests/storage_test

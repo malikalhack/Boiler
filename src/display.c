@@ -1,0 +1,92 @@
+/**
+ * @copyright @showdate "%Y " Anton Chernov. All rights reserved.
+ * @file    display.c
+ * @version 0.1.0
+ * @authors Anton Chernov
+ * @date    2026-11-03
+ * @date    @showdate "%Y-%m-%d"
+ */
+
+/******************************** Included files ******************************/
+#include "display.h"
+#include "bsp.h"
+
+/********************************* Definitions ********************************/
+/**
+ * @def DISPLAY_DECIMAL_BASE
+ * @brief Radix used to format numeric error codes.
+ */
+#define DISPLAY_DECIMAL_BASE (10U)
+
+/****************************** Module variables ******************************/
+
+static const uint8_t digit_glyphs[DISPLAY_DECIMAL_BASE] = {
+    eGlyph0, eGlyph1, eGlyph2, eGlyph3, eGlyph4,
+    eGlyph5, eGlyph6, eGlyph7, eGlyph8, eGlyph9
+};
+static SDisplayFrame_t pending_frame;
+static SDisplayFrame_t active_frame;
+static uint8_t scan_position;
+
+/********************** Application Programming Interface *********************/
+
+void display_init(void) {
+    uint8_t digit;
+
+    bsp_display_write(0U, 0U);
+    for (digit = 0U; digit < DISPLAY_DIGITS; digit++) {
+        pending_frame.slots[digit] = eGlyphDash;
+    }
+    pending_frame.slots[DISPLAY_DIGITS] = 0U;
+    active_frame = pending_frame;
+    scan_position = 0U;
+}
+
+/*----------------------------------------------------------------------------*/
+
+void display_set_frame(SDisplayFrame_t frame) {
+    pending_frame = frame;
+}
+
+/*----------------------------------------------------------------------------*/
+
+EResult_t display_show_error(EError_t error) {
+    EResult_t ret_val;
+    uint16_t code;
+    uint8_t position;
+    SDisplayFrame_t frame;
+
+    ret_val = eResultInvalidArgument;
+    if ((error >= eErrorConfigInvalid) && (error <= eErrorWatchdog)) {
+        frame = pending_frame;
+        frame.slots[0] = eGlyphE;
+        code = (uint16_t)error;
+        for (position = DISPLAY_DIGITS - 1U; position > 0U; position--) {
+            frame.slots[position] = digit_glyphs[code % DISPLAY_DECIMAL_BASE];
+            code /= DISPLAY_DECIMAL_BASE;
+        }
+        display_set_frame(frame);
+        ret_val = eResultOk;
+    }
+
+    return ret_val;
+}
+
+/*----------------------------------------------------------------------------*/
+
+void display_scan(void *context) {
+    (void)context;
+    if (scan_position == 0U) {
+        active_frame = pending_frame;
+    }
+
+    bsp_display_write(
+        active_frame.slots[scan_position],
+        (uint8_t)(1U << scan_position)
+    );
+    scan_position++;
+    if (scan_position == DISPLAY_SLOTS) {
+        scan_position = 0U;
+    }
+}
+/******************************************************************************/

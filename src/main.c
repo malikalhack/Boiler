@@ -9,8 +9,11 @@
 
 /******************************** Included files ******************************/
 #include "acrosched.h"
+#include "acrosched_defs.h"
+#include "display.h"
 #include "boiler_storage.h"
 #include "bsp.h"
+#include "tasks.h"
 /********************** Application Programming Interface *********************/
 
 /** @fn main */
@@ -18,16 +21,25 @@ int main(void) {
     EAcroStatus_t status;
 
     bspInit();
-    (void)boilerStorageInit();
+    display_init();
+    if (boilerStorageInit() != eResultOk) {
+        IGNORE_RETURN(display_show_error(eErrorConfigInvalid));
+    }
 
     status = acroInit(bspGetTick());
+    if (status == eAcroOk) {
+        status = acroAddTask(
+            eTaskDisplay, display_scan, NULL, ePeriodic, 1U,
+            TASK_PRIORITY_DISPLAY);
+    }
     if (status != eAcroOk) {
         for (;;) {}
     }
 
     bspStart();
-    (void)acroRun();
+    IGNORE_RETURN(acroRun());
 
+    bsp_display_write(0U, 0U);
     for (;;) {}
 }
 /******************************************************************************/

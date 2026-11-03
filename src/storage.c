@@ -1,6 +1,6 @@
 /**
  * @copyright @showdate "%Y " Anton Chernov. All rights reserved.
- * @file    boiler_storage.c
+ * @file    storage.c
  * @version 0.2.0
  * @authors Anton Chernov
  * @date    2026-10-04
@@ -11,102 +11,102 @@
 #include <string.h>
 
 #include "bsp.h"
-#include "boiler_storage.h"
+#include "storage.h"
 
 /********************************* Definitions ********************************/
 /**
- * @def BOILER_STORAGE_MAGIC_0
+ * @def STORAGE_MAGIC_0
  * @brief First magic byte identifying an application record.
  */
-#define BOILER_STORAGE_MAGIC_0             (0xB0U)
+#define STORAGE_MAGIC_0             (0xB0U)
 /**
- * @def BOILER_STORAGE_MAGIC_1
+ * @def STORAGE_MAGIC_1
  * @brief Second magic byte identifying an application record.
  */
-#define BOILER_STORAGE_MAGIC_1             (0x1EU)
+#define STORAGE_MAGIC_1             (0x1EU)
 /**
- * @def BOILER_STORAGE_FORMAT
+ * @def STORAGE_FORMAT
  * @brief Current EEPROM record format version.
  */
-#define BOILER_STORAGE_FORMAT              (1U)
+#define STORAGE_FORMAT              (1U)
 /**
- * @def BOILER_STORAGE_COMMIT_MARKER
+ * @def STORAGE_COMMIT_MARKER
  * @brief Marker written only after a record has been verified.
  */
-#define BOILER_STORAGE_COMMIT_MARKER       (0xA5U)
+#define STORAGE_COMMIT_MARKER       (0xA5U)
 /**
- * @def BOILER_STORAGE_EMPTY_MARKER
+ * @def STORAGE_EMPTY_MARKER
  * @brief Marker value used to invalidate the target slot before writing.
  */
-#define BOILER_STORAGE_EMPTY_MARKER        (0x00U)
+#define STORAGE_EMPTY_MARKER        (0x00U)
 /**
- * @def BOILER_STORAGE_SLOT_COUNT
+ * @def STORAGE_SLOT_COUNT
  * @brief Number of EEPROM configuration slots.
  */
-#define BOILER_STORAGE_SLOT_COUNT          (2U)
+#define STORAGE_SLOT_COUNT          (2U)
 /**
- * @def BOILER_STORAGE_EEPROM_START
+ * @def STORAGE_EEPROM_START
  * @brief First EEPROM address reserved for application configuration.
  */
-#define BOILER_STORAGE_EEPROM_START        (0x20U)
+#define STORAGE_EEPROM_START        (0x20U)
 /**
- * @def BOILER_STORAGE_SEQUENCE_HALF
+ * @def STORAGE_SEQUENCE_HALF
  * @brief Half-range used to compare wrapping 16-bit sequence numbers.
  */
-#define BOILER_STORAGE_SEQUENCE_HALF       (0x8000U)
+#define STORAGE_SEQUENCE_HALF       (0x8000U)
 /**
- * @def BOILER_STORAGE_MAGIC_0_OFFSET
+ * @def STORAGE_MAGIC_0_OFFSET
  * @brief Record offset of the first magic byte.
  */
-#define BOILER_STORAGE_MAGIC_0_OFFSET      (0U)
+#define STORAGE_MAGIC_0_OFFSET      (0U)
 /**
- * @def BOILER_STORAGE_MAGIC_1_OFFSET
+ * @def STORAGE_MAGIC_1_OFFSET
  * @brief Record offset of the second magic byte.
  */
-#define BOILER_STORAGE_MAGIC_1_OFFSET      (1U)
+#define STORAGE_MAGIC_1_OFFSET      (1U)
 /**
- * @def BOILER_STORAGE_FORMAT_OFFSET
+ * @def STORAGE_FORMAT_OFFSET
  * @brief Record offset of the format version.
  */
-#define BOILER_STORAGE_FORMAT_OFFSET       (2U)
+#define STORAGE_FORMAT_OFFSET       (2U)
 /**
- * @def BOILER_STORAGE_SEQUENCE_OFFSET
+ * @def STORAGE_SEQUENCE_OFFSET
  * @brief Record offset of the two-byte sequence number.
  */
-#define BOILER_STORAGE_SEQUENCE_OFFSET     (3U)
+#define STORAGE_SEQUENCE_OFFSET     (3U)
 /**
- * @def BOILER_STORAGE_SENSOR_OFFSET
+ * @def STORAGE_SENSOR_OFFSET
  * @brief Record offset of the first sensor ROM code.
  */
-#define BOILER_STORAGE_SENSOR_OFFSET       (5U)
+#define STORAGE_SENSOR_OFFSET       (5U)
 /**
- * @def BOILER_STORAGE_PROFILE_OFFSET
+ * @def STORAGE_PROFILE_OFFSET
  * @brief Record offset of the operating profile.
  */
-#define BOILER_STORAGE_PROFILE_OFFSET      (21U)
+#define STORAGE_PROFILE_OFFSET      (21U)
 /**
- * @def BOILER_STORAGE_SETTINGS_OFFSET
+ * @def STORAGE_SETTINGS_OFFSET
  * @brief Record offset of the application settings payload.
  */
-#define BOILER_STORAGE_SETTINGS_OFFSET     (22U)
+#define STORAGE_SETTINGS_OFFSET     (22U)
 /**
- * @def BOILER_STORAGE_CRC_OFFSET
+ * @def STORAGE_CRC_OFFSET
  * @brief Record offset of the CRC-16 field.
  */
-#define BOILER_STORAGE_CRC_OFFSET \
-    (BOILER_STORAGE_SETTINGS_OFFSET + BOILER_CONFIG_SETTINGS_SIZE)
+#define STORAGE_CRC_OFFSET \
+    (STORAGE_SETTINGS_OFFSET + CONFIG_SETTINGS_SIZE)
 /**
- * @def BOILER_STORAGE_MARKER_OFFSET
+ * @def STORAGE_MARKER_OFFSET
  * @brief Record offset of the final commit marker.
  */
-#define BOILER_STORAGE_MARKER_OFFSET \
-    (BOILER_STORAGE_CRC_OFFSET + 2U)
+#define STORAGE_MARKER_OFFSET \
+    (STORAGE_CRC_OFFSET + 2U)
 /**
- * @def BOILER_STORAGE_RECORD_SIZE
+ * @def STORAGE_RECORD_SIZE
  * @brief Total size of one EEPROM configuration record in bytes.
  */
-#define BOILER_STORAGE_RECORD_SIZE \
-    (BOILER_STORAGE_MARKER_OFFSET + 1U)
+#define STORAGE_RECORD_SIZE \
+    (STORAGE_MARKER_OFFSET + 1U)
 
 /****************************** Module variables ******************************/
 
@@ -165,17 +165,17 @@ static bool boilerStorageSequenceNewer(uint16_t candidate, uint16_t reference);
  * @brief Read a complete record from the selected EEPROM slot.
  * @param[in] slot Configuration slot index.
  * @param[out] record Buffer receiving the encoded record.
- * @returns true if the EEPROM read succeeds; otherwise false.
+ * @returns EEPROM backend result without discarding the failure cause.
  */
-static bool boilerStorageReadRecord(uint8_t slot, uint8_t *record);
+static EResult_t boilerStorageReadRecord(uint8_t slot, uint8_t *record);
 
 /**
  * @brief Write record bytes up to, but not including, the commit marker.
  * @param[in] slot Configuration slot index.
  * @param[in] record Encoded record to write.
- * @returns true if the EEPROM update succeeds; otherwise false.
+ * @returns EEPROM backend result without discarding the failure cause.
  */
-static bool boilerStorageWriteRecord(uint8_t slot, const uint8_t *record);
+static EResult_t boilerStorageWriteRecord(uint8_t slot, const uint8_t *record);
 
 /**
  * @brief Encode a configuration and sequence number into a record.
@@ -223,8 +223,8 @@ static uint16_t boilerStorageCrc(const uint8_t *data, uint8_t size) {
 static uint16_t boilerStorageReadSequence(const uint8_t *record) {
     uint16_t sequence;
 
-    sequence = (uint16_t)record[BOILER_STORAGE_SEQUENCE_OFFSET] << 8U;
-    sequence |= record[BOILER_STORAGE_SEQUENCE_OFFSET + 1U];
+    sequence = (uint16_t)record[STORAGE_SEQUENCE_OFFSET] << 8U;
+    sequence |= record[STORAGE_SEQUENCE_OFFSET + 1U];
     return sequence;
 }
 /*----------------------------------------------------------------------------*/
@@ -232,8 +232,8 @@ static uint16_t boilerStorageReadSequence(const uint8_t *record) {
 static uint16_t boilerStorageGetAddress(uint8_t slot) {
     uint16_t address;
 
-    address = BOILER_STORAGE_EEPROM_START +
-              ((uint16_t)slot * BOILER_STORAGE_RECORD_SIZE);
+    address = STORAGE_EEPROM_START +
+              ((uint16_t)slot * STORAGE_RECORD_SIZE);
     return address;
 }
 /*----------------------------------------------------------------------------*/
@@ -241,9 +241,9 @@ static uint16_t boilerStorageGetAddress(uint8_t slot) {
 static bool boilerStorageLayoutValid(void) {
     uint32_t required_size;
 
-    required_size = BOILER_STORAGE_EEPROM_START +
-                    (BOILER_STORAGE_SLOT_COUNT *
-                     BOILER_STORAGE_RECORD_SIZE);
+    required_size = STORAGE_EEPROM_START +
+                    (STORAGE_SLOT_COUNT *
+                     STORAGE_RECORD_SIZE);
     return required_size <= bspEepromSize();
 }
 /*----------------------------------------------------------------------------*/
@@ -252,17 +252,17 @@ static bool boilerStorageRecordValid(const uint8_t *record) {
     uint16_t stored_crc;
     uint16_t calculated_crc;
 
-    stored_crc = (uint16_t)record[BOILER_STORAGE_CRC_OFFSET] << 8U;
-    stored_crc |= record[BOILER_STORAGE_CRC_OFFSET + 1U];
-    calculated_crc = boilerStorageCrc(record, BOILER_STORAGE_CRC_OFFSET);
+    stored_crc = (uint16_t)record[STORAGE_CRC_OFFSET] << 8U;
+    stored_crc |= record[STORAGE_CRC_OFFSET + 1U];
+    calculated_crc = boilerStorageCrc(record, STORAGE_CRC_OFFSET);
 
-    return (record[BOILER_STORAGE_MAGIC_0_OFFSET] ==
-                BOILER_STORAGE_MAGIC_0) &&
-           (record[BOILER_STORAGE_MAGIC_1_OFFSET] ==
-                BOILER_STORAGE_MAGIC_1) &&
-           (record[BOILER_STORAGE_FORMAT_OFFSET] == BOILER_STORAGE_FORMAT) &&
-           (record[BOILER_STORAGE_MARKER_OFFSET] ==
-                BOILER_STORAGE_COMMIT_MARKER) &&
+    return (record[STORAGE_MAGIC_0_OFFSET] ==
+                STORAGE_MAGIC_0) &&
+           (record[STORAGE_MAGIC_1_OFFSET] ==
+                STORAGE_MAGIC_1) &&
+           (record[STORAGE_FORMAT_OFFSET] == STORAGE_FORMAT) &&
+           (record[STORAGE_MARKER_OFFSET] ==
+                STORAGE_COMMIT_MARKER) &&
            (stored_crc == calculated_crc);
 }
 /*----------------------------------------------------------------------------*/
@@ -272,24 +272,24 @@ static bool boilerStorageSequenceNewer(uint16_t candidate, uint16_t reference) {
 
     difference = (uint16_t)(candidate - reference);
     return (candidate != reference) &&
-           (difference < BOILER_STORAGE_SEQUENCE_HALF);
+           (difference < STORAGE_SEQUENCE_HALF);
 }
 /*----------------------------------------------------------------------------*/
 
-static bool boilerStorageReadRecord(uint8_t slot, uint8_t *record) {
+static EResult_t boilerStorageReadRecord(uint8_t slot, uint8_t *record) {
     return bspEepromRead(
         boilerStorageGetAddress(slot),
         record,
-        BOILER_STORAGE_RECORD_SIZE
+        STORAGE_RECORD_SIZE
     );
 }
 /*----------------------------------------------------------------------------*/
 
-static bool boilerStorageWriteRecord(uint8_t slot, const uint8_t *record) {
+static EResult_t boilerStorageWriteRecord(uint8_t slot, const uint8_t *record) {
     return bspEepromUpdate(
         boilerStorageGetAddress(slot),
         record,
-        BOILER_STORAGE_MARKER_OFFSET
+        STORAGE_MARKER_OFFSET
     );
 }
 /*----------------------------------------------------------------------------*/
@@ -301,21 +301,21 @@ static void boilerStorageEncode(
 ) {
     uint16_t crc;
 
-    record[BOILER_STORAGE_MAGIC_0_OFFSET] = BOILER_STORAGE_MAGIC_0;
-    record[BOILER_STORAGE_MAGIC_1_OFFSET] = BOILER_STORAGE_MAGIC_1;
-    record[BOILER_STORAGE_FORMAT_OFFSET] = BOILER_STORAGE_FORMAT;
-    record[BOILER_STORAGE_SEQUENCE_OFFSET] = (uint8_t)(sequence >> 8U);
-    record[BOILER_STORAGE_SEQUENCE_OFFSET + 1U] = (uint8_t)sequence;
-    memcpy(&record[BOILER_STORAGE_SENSOR_OFFSET], config->sensor_rom,
+    record[STORAGE_MAGIC_0_OFFSET] = STORAGE_MAGIC_0;
+    record[STORAGE_MAGIC_1_OFFSET] = STORAGE_MAGIC_1;
+    record[STORAGE_FORMAT_OFFSET] = STORAGE_FORMAT;
+    record[STORAGE_SEQUENCE_OFFSET] = (uint8_t)(sequence >> 8U);
+    record[STORAGE_SEQUENCE_OFFSET + 1U] = (uint8_t)sequence;
+    memcpy(&record[STORAGE_SENSOR_OFFSET], config->sensor_rom,
            sizeof(config->sensor_rom));
-    record[BOILER_STORAGE_PROFILE_OFFSET] = config->operating_profile;
-    memcpy(&record[BOILER_STORAGE_SETTINGS_OFFSET],
+    record[STORAGE_PROFILE_OFFSET] = config->operating_profile;
+    memcpy(&record[STORAGE_SETTINGS_OFFSET],
            config->application_settings,
            sizeof(config->application_settings));
-    crc = boilerStorageCrc(record, BOILER_STORAGE_CRC_OFFSET);
-    record[BOILER_STORAGE_CRC_OFFSET] = (uint8_t)(crc >> 8U);
-    record[BOILER_STORAGE_CRC_OFFSET + 1U] = (uint8_t)crc;
-    record[BOILER_STORAGE_MARKER_OFFSET] = BOILER_STORAGE_COMMIT_MARKER;
+    crc = boilerStorageCrc(record, STORAGE_CRC_OFFSET);
+    record[STORAGE_CRC_OFFSET] = (uint8_t)(crc >> 8U);
+    record[STORAGE_CRC_OFFSET + 1U] = (uint8_t)crc;
+    record[STORAGE_MARKER_OFFSET] = STORAGE_COMMIT_MARKER;
 }
 /*----------------------------------------------------------------------------*/
 
@@ -323,34 +323,38 @@ static void boilerStorageDecode(const uint8_t *record, SBoilerConfig_t *config){
 
     memcpy(
         config->sensor_rom,
-        &record[BOILER_STORAGE_SENSOR_OFFSET],
+        &record[STORAGE_SENSOR_OFFSET],
         sizeof(config->sensor_rom)
     );
-    config->operating_profile = record[BOILER_STORAGE_PROFILE_OFFSET];
+    config->operating_profile = record[STORAGE_PROFILE_OFFSET];
     memcpy(
         config->application_settings,
-        &record[BOILER_STORAGE_SETTINGS_OFFSET],
+        &record[STORAGE_SETTINGS_OFFSET],
         sizeof(config->application_settings)
     );
 }
 /********************** Application Programming Interface *********************/
 
-bool boilerStorageInit(void) {
-    uint8_t records[BOILER_STORAGE_SLOT_COUNT][BOILER_STORAGE_RECORD_SIZE];
-    bool valid[BOILER_STORAGE_SLOT_COUNT];
+EResult_t boilerStorageInit(void) {
+    uint8_t records[STORAGE_SLOT_COUNT][STORAGE_RECORD_SIZE];
+    bool valid[STORAGE_SLOT_COUNT];
     uint8_t selected_slot;
+    uint8_t slot;
+    EResult_t result;
 
     has_config = false;
-    storage_initialized = true;
+    storage_initialized = false;
     if (!boilerStorageLayoutValid()) {
-        return false;
+        return eResultOutOfRange;
     }
-    if (!boilerStorageReadRecord(0U, records[0]) ||
-        !boilerStorageReadRecord(1U, records[1])) {
-        return false;
+    for (slot = 0U; slot < STORAGE_SLOT_COUNT; slot++) {
+        result = boilerStorageReadRecord(slot, records[slot]);
+        if (result != eResultOk) {
+            return result;
+        }
+        valid[slot] = boilerStorageRecordValid(records[slot]);
     }
-    valid[0] = boilerStorageRecordValid(records[0]);
-    valid[1] = boilerStorageRecordValid(records[1]);
+    storage_initialized = true;
 
     if (valid[0] && valid[1]) {
         selected_slot = boilerStorageSequenceNewer(
@@ -364,81 +368,99 @@ bool boilerStorageInit(void) {
         selected_slot = 0U;
     }
     else {
-        return false;
+        return eResultNoConfig;
     }
 
     boilerStorageDecode(records[selected_slot], &current_config);
     current_sequence = boilerStorageReadSequence(records[selected_slot]);
     active_slot = selected_slot;
     has_config = true;
-    return true;
+    return eResultOk;
 }
 
 /*----------------------------------------------------------------------------*/
 
-bool boilerStorageGet(SBoilerConfig_t *config) {
-    if ((config == NULL) || !has_config) {
-        return false;
+EResult_t boilerStorageGet(SBoilerConfig_t *config) {
+    if (config == NULL) {
+        return eResultInvalidArgument;
+    }
+    if (!has_config) {
+        return eResultNoConfig;
     }
 
     *config = current_config;
-    return true;
+    return eResultOk;
 }
 
 /*----------------------------------------------------------------------------*/
 
-bool boilerStorageSave(const SBoilerConfig_t *config) {
-    uint8_t record[BOILER_STORAGE_RECORD_SIZE];
-    uint8_t verify[BOILER_STORAGE_RECORD_SIZE];
+EResult_t boilerStorageSave(const SBoilerConfig_t *config) {
+    uint8_t record[STORAGE_RECORD_SIZE];
+    uint8_t verify[STORAGE_RECORD_SIZE];
     uint8_t target_slot;
     uint8_t marker;
     uint16_t next_sequence;
+    EResult_t result;
 
     if (config == NULL) {
-        return false;
+        return eResultInvalidArgument;
     }
 
     if (!storage_initialized) {
-        (void)boilerStorageInit();
+        result = boilerStorageInit();
+        if ((result != eResultOk) && (result != eResultNoConfig)) {
+            return result;
+        }
     }
     if (!boilerStorageLayoutValid()) {
-        return false;
+        return eResultOutOfRange;
     }
 
     target_slot = has_config ? (uint8_t)(active_slot ^ 1U) : 0U;
     next_sequence = has_config ? (uint16_t)(current_sequence + 1U) : 0U;
     boilerStorageEncode(config, next_sequence, record);
-    marker = BOILER_STORAGE_EMPTY_MARKER;
-    if (!bspEepromUpdate(
-            boilerStorageGetAddress(target_slot) +
-                BOILER_STORAGE_MARKER_OFFSET,
-            &marker, sizeof(marker)) ||
-        !boilerStorageWriteRecord(target_slot, record) ||
-        !boilerStorageReadRecord(target_slot, verify)) {
-        return false;
+    marker = STORAGE_EMPTY_MARKER;
+    result = bspEepromUpdate(
+        boilerStorageGetAddress(target_slot) + STORAGE_MARKER_OFFSET,
+        &marker, sizeof(marker));
+    if (result != eResultOk) {
+        return result;
+    }
+    result = boilerStorageWriteRecord(target_slot, record);
+    if (result != eResultOk) {
+        return result;
+    }
+    result = boilerStorageReadRecord(target_slot, verify);
+    if (result != eResultOk) {
+        return result;
     }
 
-    if ((memcmp(record, verify, BOILER_STORAGE_MARKER_OFFSET) != 0) ||
-        (boilerStorageCrc(verify, BOILER_STORAGE_CRC_OFFSET) !=
-         (uint16_t)(((uint16_t)verify[BOILER_STORAGE_CRC_OFFSET] << 8U) |
-                    verify[BOILER_STORAGE_CRC_OFFSET + 1U]))) {
-        return false;
+    if ((memcmp(record, verify, STORAGE_MARKER_OFFSET) != 0) ||
+        (boilerStorageCrc(verify, STORAGE_CRC_OFFSET) !=
+         (uint16_t)(((uint16_t)verify[STORAGE_CRC_OFFSET] << 8U) |
+                    verify[STORAGE_CRC_OFFSET + 1U]))) {
+        return eResultVerifyFailed;
     }
 
-    marker = BOILER_STORAGE_COMMIT_MARKER;
-    if (!bspEepromUpdate(
-            boilerStorageGetAddress(target_slot) +
-                BOILER_STORAGE_MARKER_OFFSET,
-            &marker, sizeof(marker)) ||
-        !boilerStorageReadRecord(target_slot, verify) ||
-        !boilerStorageRecordValid(verify)) {
-        return false;
+    marker = STORAGE_COMMIT_MARKER;
+    result = bspEepromUpdate(
+        boilerStorageGetAddress(target_slot) + STORAGE_MARKER_OFFSET,
+        &marker, sizeof(marker));
+    if (result != eResultOk) {
+        return result;
+    }
+    result = boilerStorageReadRecord(target_slot, verify);
+    if (result != eResultOk) {
+        return result;
+    }
+    if (!boilerStorageRecordValid(verify)) {
+        return eResultVerifyFailed;
     }
 
     boilerStorageDecode(verify, &current_config);
     current_sequence = next_sequence;
     active_slot = target_slot;
     has_config = true;
-    return true;
+    return eResultOk;
 }
 /******************************************************************************/

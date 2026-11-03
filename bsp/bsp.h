@@ -14,6 +14,7 @@
 #include <stdint.h>
 
 #include "acrosched.h"
+#include "errors.h"
 /********************************* Definitions ********************************/
 
 /**
@@ -44,6 +45,15 @@ volatile AcroTick_t *bspGetTick(void);
 void bspStart(void);
 
 /**
+ * @brief Disable all selections, update the bus, then enable selections.
+ * @param[in] segments Active-high PA0..PA7 segment or LED data.
+ * @param[in] select_mask Active-high PB0..PB4 selections; upper bits ignored.
+ * Pass zero to leave all positions disabled. Scanning uses one-hot masks.
+ * @details Call only from startup or cooperative tasks, not from interrupts.
+ */
+void bsp_display_write(uint8_t segments, uint8_t select_mask);
+
+/**
  * @brief Enable the selected heater output.
  * @param[in] heater Heater output to enable.
  */
@@ -60,18 +70,25 @@ void bspHeaterOff(EBspHeater_t heater);
  * @param[in] address First EEPROM address to read.
  * @param[out] data Destination buffer.
  * @param[in] size Number of bytes to read.
- * @returns true if the read succeeds; otherwise false.
+ * @retval eResultOk The AVR EEPROM read completed.
+ * @retval eResultInvalidArgument Buffer is NULL or size is zero.
+ * @retval eResultOutOfRange The range exceeds EEPROM capacity.
+ * @details AVR EEPROM reads provide no hardware failure status.
  */
-bool bspEepromRead(uint16_t address, uint8_t *data, uint16_t size);
+EResult_t bspEepromRead(uint16_t address, uint8_t *data, uint16_t size);
 
 /**
  * @brief Update EEPROM bytes without rewriting unchanged values.
  * @param[in] address First EEPROM address to update.
  * @param[in] data Source buffer.
  * @param[in] size Number of bytes to update.
- * @returns true if the update succeeds; otherwise false.
+ * @retval eResultOk The AVR EEPROM update completed.
+ * @retval eResultInvalidArgument Buffer is NULL or size is zero.
+ * @retval eResultOutOfRange The range exceeds EEPROM capacity.
+ * @details AVR updates provide no hardware failure status; storage verifies
+ * the record by reading it back.
  */
-bool bspEepromUpdate(uint16_t address, const uint8_t *data, uint16_t size);
+EResult_t bspEepromUpdate(uint16_t address, const uint8_t *data, uint16_t size);
 
 /**
  * @brief Return the EEPROM capacity in bytes.
