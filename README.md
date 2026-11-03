@@ -16,3 +16,14 @@ a capacity of up to 2 kW. The boiler is built on the ATMega16A controller,
 uses two DS18B20 sensors to control the temperature in each of the heating tanks.
 A seven-segment indicator is used to indicate the current temperature.
 Eight LEDs act as additional indication. The boiler is controlled using five buttons.  
+
+#### Build
+
+Build the AVR firmware with AVR-GCC and GNU Make using `make`.
+Run host tests with `make test` (requires a host C compiler).
+
+#### Documentation
+
+- [Specification](SPECIFICATION.md) - technical requirements.
+- [History](HISTORY.md) - completed work, changes, and engineering decisions.
+- [Changelog](CHANGELOG.md) - release-oriented changes.
