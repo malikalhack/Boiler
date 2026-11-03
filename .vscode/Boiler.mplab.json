@@ -16,7 +16,7 @@
                 }
             ],
             "fileSet": "default",
-            "toolchain": "toolchain AVR-GCC 5.4.0",
+            "toolchain": "toolchain AVR-GCC 7.3.0",
             "userVariables": "boiler-uservariables"
         }
     ],
@@ -24,31 +24,36 @@
         {
             "name": "boiler-uservariables",
             "type": "uservariables",
-            "properties": {}
+            "properties": {
+                "MPLAB_BUILD_ROOT": "output"
+            }
         },
         {
-            "name": "toolchain AVR-GCC 5.4.0",
+            "name": "toolchain AVR-GCC 7.3.0",
             "extend": "",
             "type": "toolchain",
             "provider": "microchip.toolchains:avr-gcc@7.3.0",
             "properties": {
                 "compiler.extra-include-directories": [
-                    "/home/malik/03_Programs/AVRStudio/Boiler/inc",
-                    "/home/malik/03_Programs/AVRStudio/Boiler/lib",
-                    "/home/malik/03_Programs/AVRStudio/Boiler/bsp"
+                    "inc",
+                    "lib",
+                    "bsp"
                 ],
                 "compiler.preprocessor-macros": [
                     "F_CPU=14745600UL"
                 ],
                 "linker.extra-lib-directories": [
-                    "/home/malik/03_Programs/AVRStudio/Boiler/lib"
+                    "lib"
                 ],
                 "assembler-pre.include-paths": [
-                    "/home/malik/03_Programs/AVRStudio/Boiler/src"
+                    "src"
                 ],
                 "global.omit-pack-options": false,
-                "compiler.default-char-type": true,
-                "compiler.default-bitfield-type": true,
+                "compiler.default-char-type": false,
+                "compiler.default-bitfield-type": false,
+                "compiler.optimization-level": "-Os",
+                "compiler.pack-struct": false,
+                "compiler.short-enums": false,
                 "compiler.garbage-collect-data": true,
                 "compiler++.default-char-type": true,
                 "compiler++.default-bitfield-type": true,
@@ -58,7 +63,7 @@
         {
             "name": "default-AVR-GCC",
             "type": "toolchain",
-            "provider": "microchip.toolchains:avr-gcc@5.4.0",
+            "provider": "microchip.toolchains:avr-gcc@7.3.0",
             "properties": {}
         },
         {

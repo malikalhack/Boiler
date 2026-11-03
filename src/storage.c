@@ -335,7 +335,7 @@ static void boilerStorageDecode(const uint8_t *record, SBoilerConfig_t *config){
 }
 /********************** Application Programming Interface *********************/
 
-EResult_t boilerStorageInit(void) {
+EResult_t storageInit(void) {
     uint8_t records[STORAGE_SLOT_COUNT][STORAGE_RECORD_SIZE];
     bool valid[STORAGE_SLOT_COUNT];
     uint8_t selected_slot;
@@ -380,7 +380,7 @@ EResult_t boilerStorageInit(void) {
 
 /*----------------------------------------------------------------------------*/
 
-EResult_t boilerStorageGet(SBoilerConfig_t *config) {
+EResult_t storageGet(SBoilerConfig_t *config) {
     if (config == NULL) {
         return eResultInvalidArgument;
     }
@@ -394,7 +394,7 @@ EResult_t boilerStorageGet(SBoilerConfig_t *config) {
 
 /*----------------------------------------------------------------------------*/
 
-EResult_t boilerStorageSave(const SBoilerConfig_t *config) {
+EResult_t storageSave(const SBoilerConfig_t *config) {
     uint8_t record[STORAGE_RECORD_SIZE];
     uint8_t verify[STORAGE_RECORD_SIZE];
     uint8_t target_slot;
@@ -407,7 +407,7 @@ EResult_t boilerStorageSave(const SBoilerConfig_t *config) {
     }
 
     if (!storage_initialized) {
-        result = boilerStorageInit();
+        result = storageInit();
         if ((result != eResultOk) && (result != eResultNoConfig)) {
             return result;
         }

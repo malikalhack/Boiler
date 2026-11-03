@@ -12,7 +12,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "boiler_storage.h"
+#include "storage.h"
 #include "bsp.h"
 /********************************* Definitions ********************************/
 
@@ -103,7 +103,7 @@ uint16_t bspEepromSize(void) {
 static void check_cached(const SBoilerConfig_t *expected) {
     SBoilerConfig_t actual;
 
-    assert(boilerStorageGet(&actual) == eResultOk);
+    assert(storageGet(&actual) == eResultOk);
     assert(memcmp(actual.sensor_rom, expected->sensor_rom,
                   sizeof(actual.sensor_rom)) == 0);
     assert(actual.operating_profile == expected->operating_profile);
@@ -125,84 +125,84 @@ static void test_storage(void) {
     next = first;
     next.application_settings[0] = 1U;
 
-    assert(boilerStorageGet(&actual) == eResultNoConfig);
-    assert(boilerStorageGet(NULL) == eResultInvalidArgument);
-    assert(boilerStorageSave(NULL) == eResultInvalidArgument);
+    assert(storageGet(&actual) == eResultNoConfig);
+    assert(storageGet(NULL) == eResultInvalidArgument);
+    assert(storageSave(NULL) == eResultInvalidArgument);
     memset(eeprom_data, 0xFF, sizeof(eeprom_data));
     read_failure = true;
-    assert(boilerStorageSave(&first) == eResultReadFailed);
+    assert(storageSave(&first) == eResultReadFailed);
     assert(update_count == 0U);
     read_failure = false;
-    assert(boilerStorageSave(&first) == eResultOk);
+    assert(storageSave(&first) == eResultOk);
     check_cached(&first);
     memset(eeprom_data, 0xFF, sizeof(eeprom_data));
-    assert(boilerStorageInit() == eResultNoConfig);
-    assert(boilerStorageSave(&first) == eResultOk);
+    assert(storageInit() == eResultNoConfig);
+    assert(storageSave(&first) == eResultOk);
     check_cached(&first);
-    assert(boilerStorageInit() == eResultOk);
+    assert(storageInit() == eResultOk);
     check_cached(&first);
     memcpy(saved_eeprom, eeprom_data, sizeof(saved_eeprom));
 
     for (failure = 1U; failure <= TEST_SAVE_WRITES; failure++) {
         memcpy(eeprom_data, saved_eeprom, sizeof(eeprom_data));
-        assert(boilerStorageInit() == eResultOk);
+        assert(storageInit() == eResultOk);
         update_count = 0U;
         failed_update = failure;
-        assert(boilerStorageSave(&next) == eResultWriteFailed);
+        assert(storageSave(&next) == eResultWriteFailed);
         check_cached(&first);
         failed_update = 0U;
-        assert(boilerStorageInit() == eResultOk);
+        assert(storageInit() == eResultOk);
         check_cached(&first);
     }
 
     for (failure = 1U; failure <= TEST_SAVE_READS; failure++) {
         memcpy(eeprom_data, saved_eeprom, sizeof(eeprom_data));
-        assert(boilerStorageInit() == eResultOk);
+        assert(storageInit() == eResultOk);
         read_count = 0U;
         failed_read = failure;
-        assert(boilerStorageSave(&next) == eResultReadFailed);
+        assert(storageSave(&next) == eResultReadFailed);
         check_cached(&first);
         failed_read = 0U;
     }
     memcpy(eeprom_data, saved_eeprom, sizeof(eeprom_data));
-    assert(boilerStorageInit() == eResultOk);
+    assert(storageInit() == eResultOk);
 
     corrupt_write = true;
-    assert(boilerStorageSave(&next) == eResultVerifyFailed);
+    assert(storageSave(&next) == eResultVerifyFailed);
     check_cached(&first);
     corrupt_write = false;
 
     update_count = 0U;
     corrupt_commit = true;
-    assert(boilerStorageSave(&next) == eResultVerifyFailed);
+    assert(storageSave(&next) == eResultVerifyFailed);
     check_cached(&first);
     corrupt_commit = false;
 
     read_failure = true;
-    assert(boilerStorageSave(&next) == eResultReadFailed);
+    assert(storageSave(&next) == eResultReadFailed);
     check_cached(&first);
-    assert(boilerStorageInit() == eResultReadFailed);
-    assert(boilerStorageGet(&actual) == eResultNoConfig);
+    assert(storageInit() == eResultReadFailed);
+    assert(storageGet(&actual) == eResultNoConfig);
     update_count = 0U;
-    assert(boilerStorageSave(&next) == eResultReadFailed);
+    assert(storageSave(&next) == eResultReadFailed);
     assert(update_count == 0U);
     read_failure = false;
 
-    assert(boilerStorageInit() == eResultOk);
+    assert(storageInit() == eResultOk);
     check_cached(&first);
-    assert(boilerStorageSave(&next) == eResultOk);
+    assert(storageSave(&next) == eResultOk);
     check_cached(&next);
-    assert(boilerStorageInit() == eResultOk);
+    assert(storageInit() == eResultOk);
     check_cached(&next);
 
     memset(eeprom_data, 0, sizeof(eeprom_data));
-    assert(boilerStorageInit() == eResultNoConfig);
-    assert(boilerStorageGet(&actual) == eResultNoConfig);
+    assert(storageInit() == eResultNoConfig);
+    assert(storageGet(&actual) == eResultNoConfig);
 
     capacity = 1U;
     update_count = 0U;
-    assert(boilerStorageInit() == eResultOutOfRange);
-    assert(boilerStorageSave(&next) == eResultOutOfRange);
+    assert(storageInit() == eResultOutOfRange);
+    assert(storageSave(&next) == eResultOutOfRange);
     assert(update_count == 0U);
 }
 /*----------------------------------------------------------------------------*/

@@ -157,3 +157,48 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
   into this dated history entry. The README is reserved for the project
   overview and user-facing information; changes and decisions belong here,
   with release-oriented summaries retained in `CHANGELOG.md`.
+
+### MPLAB build integration
+
+- Updated `.vscode/Boiler.mplab.json` for AVR-GCC 7.3.0: project-relative
+  include/library paths, `-Os`, and disabled packed structures, short enums,
+  unsigned char, and unsigned bitfields to preserve the AcroSched ABI.
+  Recursive file sets include display, storage, and the new headers.
+- Completed storage renaming in the implementation, application, and tests:
+  `storage.h` and `storageInit/Get/Save` now agree.
+- Fixed binary-directory resolution in Toolchain Support for MPLAB 1.11.2.
+  It resolved a relative path against the wrong directory, losing compiler,
+  objcopy, and objdump paths for the nested AVR installation.
+  With user approval, changed the installed bundle's calculation from
+  `c.relative(it.compilerBaseFolder,it.compilerBinFolder)` to
+  `c.relative(Me,it.compilerBinFolder)`, where `Me` is the scan root.
+  The bundle is `microchip.toolchains-1.11.2/dist/extension.js`; its original
+  is backed up in the session files directory. Extension updates can
+  overwrite this local correction.
+- The compiler installation is unchanged. MPLAB generates CMake normally;
+  all generated `cmake/` files are ignored, with no custom CMake hook or
+  additional toolchain registration required.
+- Verified JavaScript syntax, standard/nested installation paths, and the
+  full IDE build after reloading VS Code. A clean native preset also passed
+  without manual compiler or image-tool overrides:
+
+  ```sh
+  cmake --fresh --preset Boiler_boiler_conf -S output/cmake/Boiler/boiler
+  cmake --build output/_build/Boiler/boiler
+  ```
+
+  Program memory is 2288 bytes; static RAM is 209 bytes.
+
+### MPLAB generated directories
+
+- Set `MPLAB_BUILD_ROOT=output` in the project's user variables. A local
+  correction to `microchip.runcmake-1.11.0/dist/extension.js` passes
+  `projectCMakefilesBaseDir` and `buildBaseDir` to the shared build-tree
+  factory, placing generated files in `output/cmake/` and `output/_build/`.
+  Projects without this variable retain their default layout.
+- Updated the editor's compile-commands directory. Firmware images remain
+  in `output/mplab/`; generated directories no longer occupy the project
+  root. Verified IDE generation and a clean native preset build at the new
+  paths using the commands above.
+- The CMake Runner correction, like the toolchain correction, is local to
+  the installed extension and may be overwritten by an extension update.

@@ -11,35 +11,51 @@
 #include "acrosched.h"
 #include "acrosched_defs.h"
 #include "display.h"
-#include "boiler_storage.h"
+#include "storage.h"
 #include "bsp.h"
 #include "tasks.h"
+/********************************* Definitions ********************************/
+
+/*
+ * @def CHECK_STATUS
+ * @brief Checks the return value and, if unsuccessful, halts via error_handler.
+ */
+#define CHECK_STATUS(x) do { \
+    if ((x) != eAcroOk) { \
+        error_handler(); \
+    } \
+} while (0)
+
+/***************************** Private prototypes *****************************/
+
+static void error_handler(void);
+
 /********************** Application Programming Interface *********************/
 
 /** @fn main */
 int main(void) {
-    EAcroStatus_t status;
-
     bspInit();
     display_init();
-    if (boilerStorageInit() != eResultOk) {
+    if (storageInit() != eResultOk) {
         IGNORE_RETURN(display_show_error(eErrorConfigInvalid));
     }
 
-    status = acroInit(bspGetTick());
-    if (status == eAcroOk) {
-        status = acroAddTask(
-            eTaskDisplay, display_scan, NULL, ePeriodic, 1U,
-            TASK_PRIORITY_DISPLAY);
-    }
-    if (status != eAcroOk) {
-        for (;;) {}
-    }
+    CHECK_STATUS(acroInit(bspGetTick()));
+    CHECK_STATUS(acroAddTask(
+        eTaskDisplay, display_scan, NULL, ePeriodic, 1U, TASK_PRIORITY_DISPLAY
+    ));
 
     bspStart();
-    IGNORE_RETURN(acroRun());
+    IGNORE_RETURN(acroRun());   /* should never return */
 
-    bsp_display_write(0U, 0U);
-    for (;;) {}
+    bsp_display_write(0U, 0U);  /* turn off display */
+    error_handler();            /* error handling if acroRun() returns */
+}
+/****************************** Private functions *****************************/
+
+static void error_handler(void) {
+    while (1) {
+        /* halt */
+    }
 }
 /******************************************************************************/

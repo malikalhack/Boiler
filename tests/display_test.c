@@ -12,7 +12,7 @@
 #include <stdio.h>
 
 #include "display.h"
-#include "boiler_storage.h"
+#include "storage.h"
 #include "bsp.h"
 
 /**
@@ -68,7 +68,7 @@ void bspStart(void) {
 }
 /*----------------------------------------------------------------------------*/
 
-EResult_t boilerStorageInit(void) {
+EResult_t storageInit(void) {
     assert(ports_initialized);
     assert(!interrupts_enabled);
     return storage_valid ? eResultOk : eResultNoConfig;
