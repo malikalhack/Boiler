@@ -73,6 +73,14 @@ void display_init(void);
 void display_set_frame(SDisplayFrame_t frame);
 
 /**
+ * @brief Update selected LED bits without changing digits or other LEDs.
+ * @param[in] mask LED bits owned by the caller.
+ * @param[in] value New states of the selected bits.
+ * @details The change latches at K1; use only from cooperative tasks/startup.
+ */
+void display_set_leds(uint8_t mask, uint8_t value);
+
+/**
  * @brief Queue an E001..E009 screen while preserving the pending LED byte.
  * @param[in] error Application error code to display.
  * @returns eResultOk if queued; eResultInvalidArgument for zero/unknown codes.

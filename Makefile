@@ -21,6 +21,7 @@ LDLIBS      := -Llib -lacrosched
 
 SOURCES     := $(SRC_DIR)/main.c $(SRC_DIR)/storage.c \
 			   $(SRC_DIR)/display.c \
+			   $(SRC_DIR)/feedback.c \
 			   $(BSP_DIR)/bsp.c
 OBJECTS     := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SOURCES))
 ELF         := $(BUILD_DIR)/$(TARGET).elf
@@ -57,6 +58,7 @@ test:
 	mkdir -p $(BUILD_DIR)/tests
 	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Itests/stubs -I$(INC_DIR) -Ilib \
 		-I$(BSP_DIR) tests/display_test.c $(SRC_DIR)/display.c \
+		$(SRC_DIR)/feedback.c \
 		-o $(BUILD_DIR)/tests/display_test
 	$(BUILD_DIR)/tests/display_test
 	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Itests/stubs -I$(INC_DIR) -Ilib \

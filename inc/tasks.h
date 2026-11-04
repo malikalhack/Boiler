@@ -16,7 +16,8 @@
  * @brief Unique scheduler descriptors; zero is reserved by AcroSched.
  */
 typedef enum ETask {
-    eTaskDisplay = 1
+    eTaskDisplay = 1,
+    eTaskFeedback
 } ETask_t;
 
 /**
@@ -24,5 +25,10 @@ typedef enum ETask {
  * @brief Display dispatch priority; equal priorities use registration order.
  */
 #define TASK_PRIORITY_DISPLAY (0U)
+/**
+ * @def TASK_PRIORITY_FEEDBACK
+ * @brief Feedback task dispatch priority.
+ */
+#define TASK_PRIORITY_FEEDBACK (0U)
 /******************************************************************************/
 #endif // !TASKS_H

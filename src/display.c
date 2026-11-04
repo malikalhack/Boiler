@@ -50,6 +50,13 @@ void display_set_frame(SDisplayFrame_t frame) {
 
 /*----------------------------------------------------------------------------*/
 
+void display_set_leds(uint8_t mask, uint8_t value) {
+    pending_frame.slots[DISPLAY_DIGITS] =
+        (pending_frame.slots[DISPLAY_DIGITS] & (uint8_t)~mask) |
+        (value & mask);
+}
+/*----------------------------------------------------------------------------*/
+
 EResult_t display_show_error(EError_t error) {
     EResult_t ret_val;
     uint16_t code;

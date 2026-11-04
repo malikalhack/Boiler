@@ -202,3 +202,26 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
   paths using the commands above.
 - The CMake Runner correction, like the toolchain correction, is local to
   the installed extension and may be overwritten by an extension update.
+
+## 2026-11-04
+
+### Startup sound and HL4 indication
+
+- Confirmed on hardware that E001 displays correctly after correcting
+  insufficient supply power; the segment and digit-select polarities stand.
+- Confirmed the active, self-oscillating buzzer on PC2 is active high.
+  Added a single non-blocking 100 ms startup beep after task registration,
+  silenced on expiry or fatal scheduler failure.
+- HL4 maps to segment D / PA3 in K5. It is continuously on in the
+  no-error state, or blinks 500 ms on / 500 ms off while an error is active.
+  Error-state transitions restart the ON phase without repeating the beep.
+- Added a cooperative feedback task using elapsed atomic tick snapshots,
+  including tick wrap handling. Masked LED updates preserve other LED bits
+  and digits and continue to latch at the display frame boundary.
+- A valid EEPROM currently selects no-error indication, not authorization
+  to heat: heater outputs remain disabled until application checks exist.
+- Display/feedback and storage host tests pass, including beep duration,
+  blink phases, state transitions and tick wrap. The complete Make AVR build
+  uses 2700 bytes of program memory and 216 bytes of static RAM.
+- Hardware verification: the user confirmed a short startup beep and
+  blinking HL4 after flashing.

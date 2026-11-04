@@ -41,6 +41,8 @@ static bool ports_initialized;
 static bool interrupts_enabled;
 static volatile AcroTick_t tick;
 static AcroTask_t *registered_task;
+static AcroTask_t *feedback_task;
+static bool buzzer_on;
 static jmp_buf scheduler_exit;
 
 /********************** Application Programming Interface *********************/
@@ -68,6 +70,16 @@ void bspStart(void) {
 }
 /*----------------------------------------------------------------------------*/
 
+AcroTick_t bsp_get_time(void) {
+    return tick;
+}
+/*----------------------------------------------------------------------------*/
+
+void bsp_buzzer_set(bool enabled) {
+    buzzer_on = enabled;
+}
+/*----------------------------------------------------------------------------*/
+
 EResult_t storageInit(void) {
     assert(ports_initialized);
     assert(!interrupts_enabled);
@@ -90,14 +102,21 @@ EAcroStatus_t acroAddTask(
     AcroTick_t period,
     uint8_t priority
 ) {
-    assert(descriptor == eTaskDisplay);
-    assert(task == display_scan);
+    if (descriptor == eTaskDisplay) {
+        assert(task == display_scan);
+        assert(priority == TASK_PRIORITY_DISPLAY);
+        registered_task = task;
+    }
+    else {
+        assert(descriptor == eTaskFeedback);
+        assert(task == feedback_update);
+        assert(priority == TASK_PRIORITY_FEEDBACK);
+        feedback_task = task;
+    }
     assert(params == NULL);
     assert(mode == ePeriodic);
     assert(period == 1U);
-    assert(priority == TASK_PRIORITY_DISPLAY);
     assert(!interrupts_enabled);
-    registered_task = task;
     return eAcroOk;
 }
 /*----------------------------------------------------------------------------*/
@@ -105,6 +124,8 @@ EAcroStatus_t acroAddTask(
 EAcroStatus_t acroRun(void) {
     assert(interrupts_enabled);
     assert(registered_task != NULL);
+    assert(feedback_task != NULL);
+    assert(buzzer_on);
     longjmp(scheduler_exit, 1);
 }
 
@@ -176,11 +197,16 @@ static void test_frames(void) {
 static void test_startup(bool valid, SDisplayFrame_t expected) {
     storage_valid = valid;
     registered_task = NULL;
+    feedback_task = NULL;
+    tick = 0U;
     if (setjmp(scheduler_exit) == 0) {
         (void)firmware_main();
         assert(false);
     }
     check_frame(expected);
+    tick = FEEDBACK_BEEP_TICKS;
+    feedback_task(NULL);
+    assert(!buzzer_on);
 }
 /*----------------------------------------------------------------------------*/
 
@@ -227,16 +253,78 @@ static void test_errors(void) {
 }
 /*----------------------------------------------------------------------------*/
 
+static void test_feedback(void) {
+    SDisplayFrame_t frame = {{eGlyph1, eGlyph2, eGlyph3, eGlyph4, 0xA1U}};
+    SDisplayFrame_t expected;
+    uint16_t elapsed;
+
+    display_init();
+    display_set_frame(frame);
+    expected = frame;
+    expected.slots[DISPLAY_DIGITS] |= FEEDBACK_LED_MASK;
+    tick = 0U;
+    feedback_init(false);
+    for (elapsed = 0U; elapsed <= FEEDBACK_BLINK_TICKS; elapsed++) {
+        tick = elapsed;
+        feedback_update(NULL);
+        assert(buzzer_on == (elapsed < FEEDBACK_BEEP_TICKS));
+        check_frame(expected);
+    }
+
+    feedback_set_error(true);
+    for (elapsed = 0U; elapsed <= 2U * FEEDBACK_BLINK_TICKS; elapsed++) {
+        tick = FEEDBACK_BLINK_TICKS + elapsed;
+        feedback_update(NULL);
+        expected.slots[DISPLAY_DIGITS] = frame.slots[DISPLAY_DIGITS];
+        if ((elapsed % FEEDBACK_BLINK_TICKS) <
+            FEEDBACK_BLINK_TICKS / 2U) {
+            expected.slots[DISPLAY_DIGITS] |= FEEDBACK_LED_MASK;
+        }
+        check_frame(expected);
+        assert(!buzzer_on);
+    }
+
+    feedback_set_error(false);
+    expected.slots[DISPLAY_DIGITS] |= FEEDBACK_LED_MASK;
+    check_frame(expected);
+    tick += FEEDBACK_BLINK_TICKS;
+    feedback_update(NULL);
+    check_frame(expected);
+    assert(!buzzer_on);
+
+    tick = (AcroTick_t)-1;
+    tick -= FEEDBACK_BEEP_TICKS / 2U;
+    feedback_init(true);
+    tick += FEEDBACK_BEEP_TICKS - 1U;
+    feedback_update(NULL);
+    assert(buzzer_on);
+    tick++;
+    feedback_update(NULL);
+    assert(!buzzer_on);
+    tick += FEEDBACK_BLINK_TICKS / 2U - FEEDBACK_BEEP_TICKS;
+    feedback_update(NULL);
+    check_frame(frame);
+    tick += FEEDBACK_BLINK_TICKS;
+    feedback_set_error(true);
+    feedback_update(NULL);
+    check_frame(frame);
+    tick += FEEDBACK_BLINK_TICKS / 2U;
+    feedback_update(NULL);
+    check_frame(expected);
+}
+/*----------------------------------------------------------------------------*/
+
 int main(void) {
     SDisplayFrame_t error = {
-        {eGlyphE, eGlyph0, eGlyph0, eGlyph1, 0U}
+        {eGlyphE, eGlyph0, eGlyph0, eGlyph1, FEEDBACK_LED_MASK}
     };
     SDisplayFrame_t dashes = {
-        {eGlyphDash, eGlyphDash, eGlyphDash, eGlyphDash, 0U}
+        {eGlyphDash, eGlyphDash, eGlyphDash, eGlyphDash, FEEDBACK_LED_MASK}
     };
 
     test_frames();
     test_errors();
+    test_feedback();
     test_startup(false, error);
     test_startup(true, dashes);
     puts("Display tests passed");

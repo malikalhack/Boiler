@@ -40,6 +40,18 @@ void bspInit(void);
 volatile AcroTick_t *bspGetTick(void);
 
 /**
+ * @brief Read an atomic snapshot of the system tick counter.
+ * @returns Current tick count with the caller's interrupt state preserved.
+ */
+AcroTick_t bsp_get_time(void);
+
+/**
+ * @brief Switch the active-high, self-oscillating buzzer on PC2.
+ * @param[in] enabled True to sound; false to silence.
+ */
+void bsp_buzzer_set(bool enabled);
+
+/**
  * @brief Enable global interrupts.
  */
 void bspStart(void);

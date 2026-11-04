@@ -118,6 +118,14 @@ K1 -> K2 -> K3 -> K4 -> K5
 The target slot-switching period is approximately 1 ms. The final value is
 tuned during brightness and flicker testing.
 
+HL4 is connected to segment D (PA3, bit 3) in the K5 LED slot. It remains
+on during normal operation. While an error is active, it blinks with a
+one-second period: 500 ms on and 500 ms off (50 percent duty cycle).
+
+The buzzer on PC2 is active, with a built-in oscillator, and sounds when
+the pin is high. Startup produces one short 100 ms signal; it must not
+sound continuously in an error state. Timing is non-blocking.
+
 ### 2.4. Heater Outputs
 
 PD4 and PD5 are connected directly to the cathodes of the CPC1008N input

@@ -11,6 +11,7 @@
 #include <avr/eeprom.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <util/atomic.h>
 
 #include "boiler_config.h"
 #include "bsp.h"
@@ -184,6 +185,26 @@ volatile AcroTick_t *bspGetTick(void) {
 
 void bspStart(void) {
     sei();
+}
+/*----------------------------------------------------------------------------*/
+
+AcroTick_t bsp_get_time(void) {
+    AcroTick_t now;
+
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+        now = system_tick;
+    }
+    return now;
+}
+/*----------------------------------------------------------------------------*/
+
+void bsp_buzzer_set(bool enabled) {
+    if (enabled) {
+        PORTC |= BSP_BUZZER_MASK;
+    }
+    else {
+        PORTC &= (uint8_t)~BSP_BUZZER_MASK;
+    }
 }
 /*----------------------------------------------------------------------------*/
 

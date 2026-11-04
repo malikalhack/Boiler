@@ -11,6 +11,7 @@
 #include "acrosched.h"
 #include "acrosched_defs.h"
 #include "display.h"
+#include "feedback.h"
 #include "storage.h"
 #include "bsp.h"
 #include "tasks.h"
@@ -28,15 +29,18 @@
 
 /***************************** Private prototypes *****************************/
 
-static void error_handler(void);
+_Noreturn static void error_handler(void);
 
 /********************** Application Programming Interface *********************/
 
 /** @fn main */
 int main(void) {
+    bool config_error;
+
     bspInit();
     display_init();
-    if (storageInit() != eResultOk) {
+    config_error = storageInit() != eResultOk;
+    if (config_error) {
         IGNORE_RETURN(display_show_error(eErrorConfigInvalid));
     }
 
@@ -44,7 +48,12 @@ int main(void) {
     CHECK_STATUS(acroAddTask(
         eTaskDisplay, display_scan, NULL, ePeriodic, 1U, TASK_PRIORITY_DISPLAY
     ));
+    CHECK_STATUS(acroAddTask(
+        eTaskFeedback, feedback_update, NULL, ePeriodic, 1U,
+        TASK_PRIORITY_FEEDBACK
+    ));
 
+    feedback_init(config_error);
     bspStart();
     IGNORE_RETURN(acroRun());   /* should never return */
 
@@ -53,7 +62,8 @@ int main(void) {
 }
 /****************************** Private functions *****************************/
 
-static void error_handler(void) {
+_Noreturn static void error_handler(void) {
+    bsp_buzzer_set(false);
     while (1) {
         /* halt */
     }
