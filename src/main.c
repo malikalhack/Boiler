@@ -10,6 +10,7 @@
 /******************************** Included files ******************************/
 #include "acrosched.h"
 #include "acrosched_defs.h"
+#include "buttons.h"
 #include "display.h"
 #include "feedback.h"
 #include "storage.h"
@@ -52,7 +53,12 @@ int main(void) {
         eTaskFeedback, feedback_update, NULL, ePeriodic, 1U,
         TASK_PRIORITY_FEEDBACK
     ));
+    CHECK_STATUS(acroAddTask(
+        eTaskButtons, buttons_poll, NULL, ePeriodic, 1U,
+        TASK_PRIORITY_BUTTONS
+    ));
 
+    buttons_init(NULL);
     feedback_init(config_error);
     bspStart();
     IGNORE_RETURN(acroRun());   /* should never return */

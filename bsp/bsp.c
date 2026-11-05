@@ -215,6 +215,11 @@ void bsp_display_write(uint8_t segments, uint8_t select_mask) {
 }
 /*----------------------------------------------------------------------------*/
 
+uint8_t bsp_get_buttons(void) {
+    return ((uint8_t)~PINC & BSP_BUTTON_MASK) >> PC3;
+}
+/*----------------------------------------------------------------------------*/
+
 void bspHeaterOn(EBspHeater_t heater) {
     uint8_t heater_mask;
 

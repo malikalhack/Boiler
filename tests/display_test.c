@@ -42,6 +42,7 @@ static bool interrupts_enabled;
 static volatile AcroTick_t tick;
 static AcroTask_t *registered_task;
 static AcroTask_t *feedback_task;
+static AcroTask_t *buttons_task;
 static bool buzzer_on;
 static jmp_buf scheduler_exit;
 
@@ -80,6 +81,11 @@ void bsp_buzzer_set(bool enabled) {
 }
 /*----------------------------------------------------------------------------*/
 
+uint8_t bsp_get_buttons(void) {
+    return 0U;
+}
+/*----------------------------------------------------------------------------*/
+
 EResult_t storageInit(void) {
     assert(ports_initialized);
     assert(!interrupts_enabled);
@@ -107,11 +113,16 @@ EAcroStatus_t acroAddTask(
         assert(priority == TASK_PRIORITY_DISPLAY);
         registered_task = task;
     }
-    else {
-        assert(descriptor == eTaskFeedback);
+    else if (descriptor == eTaskFeedback) {
         assert(task == feedback_update);
         assert(priority == TASK_PRIORITY_FEEDBACK);
         feedback_task = task;
+    }
+    else {
+        assert(descriptor == eTaskButtons);
+        assert(task == buttons_poll);
+        assert(priority == TASK_PRIORITY_BUTTONS);
+        buttons_task = task;
     }
     assert(params == NULL);
     assert(mode == ePeriodic);
@@ -125,6 +136,8 @@ EAcroStatus_t acroRun(void) {
     assert(interrupts_enabled);
     assert(registered_task != NULL);
     assert(feedback_task != NULL);
+    assert(buttons_task != NULL);
+    assert(buttons_get_state() == 0U);
     assert(buzzer_on);
     longjmp(scheduler_exit, 1);
 }
@@ -198,6 +211,7 @@ static void test_startup(bool valid, SDisplayFrame_t expected) {
     storage_valid = valid;
     registered_task = NULL;
     feedback_task = NULL;
+    buttons_task = NULL;
     tick = 0U;
     if (setjmp(scheduler_exit) == 0) {
         (void)firmware_main();

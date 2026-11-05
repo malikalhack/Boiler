@@ -228,6 +228,28 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
 
 ## 2026-11-05
 
+### Button input
+
+- Added active-low PC3..PC7 reading with existing internal pull-ups,
+  independent 20 ms press/release debounce, and a 1 ms polling task.
+- Added synchronous press/release events and Up/Down repeats. The user
+  replaced the original four slow changes with one initial press, a 3 s
+  pause, then repeats every 500 ms starting exactly at the 3 s boundary.
+- Raw release suspends repeats before release debounce completes. Timing
+  uses elapsed atomic tick snapshots and handles tick wrap; delayed polls
+  emit at most one repeat per button, not a burst.
+- The driver supports an optional non-blocking event handler and a pressed
+  state mask. Startup currently uses state-only polling, as agreed: menus,
+  sensor assignment, numeric editing and heater control are not added here.
+- Verified `make test` and `make -B all`: button, display/startup and storage
+  tests plus 26 existing Python tests pass. Button tests cover all 32 input
+  combinations, bounce, exact debounce/hold/repeat boundaries, independent
+  simultaneous buttons, release, reinitialization, delayed polls and holds
+  spanning tick wrap. Firmware uses 3134 bytes Flash and 252 bytes static RAM.
+- MPLAB's recursive file set already covers the new module; regenerate its
+  CMake files before building so the source list includes `src/buttons.c`.
+  Hardware button verification remains pending.
+
 ### GitHub Actions and pull requests
 
 - Adapted the copied development version workflow to this project: `VERSION`

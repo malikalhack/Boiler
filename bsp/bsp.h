@@ -52,6 +52,12 @@ AcroTick_t bsp_get_time(void);
 void bsp_buzzer_set(bool enabled);
 
 /**
+ * @brief Read active-low PC3..PC7 buttons without changing port outputs.
+ * @returns Pressed bits: bit 0 Down, 1 Right, 2 Up, 3 Left, 4 Enter.
+ */
+uint8_t bsp_get_buttons(void);
+
+/**
  * @brief Enable global interrupts.
  */
 void bspStart(void);

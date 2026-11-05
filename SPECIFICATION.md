@@ -455,13 +455,26 @@ valid configuration, the device returns to `CONFIG_INVALID`.
 - Temperature and other numeric settings are edited as whole integer values,
   not digit by digit.
 - A short `Up` or `Down` press changes the selected value by one unit.
-- Holding `Up` or `Down` changes the value by one unit once per second for the
-  first four changes.
-- After the fourth held change, accelerated repeat starts at one change every
-  500 ms.
+- Holding `Up` or `Down` first changes the value once on the debounced press.
+- No further changes occur during the next 3 seconds.
+- The first repeat occurs at 3 seconds after the debounced press, followed
+  by one change every 500 ms until release.
 - The accelerated interval is a configuration parameter that may be reduced
   to 250 ms after hardware testing confirms that the setting remains usable.
 - Value changes are clamped to the valid range and never wrap around.
+
+### Button Input
+
+- PC3..PC7 use internal pull-ups; a pressed button connects its input to ground.
+- All five buttons are polled independently every system tick.
+- Both press and release require 20 ms of stable sampled input.
+- Press, release and Up/Down repeat events are delivered synchronously to
+  a non-blocking cooperative handler. Left, Right and Enter do not repeat.
+- Raw release suspends repeats immediately, while its release event still
+  requires debounce. Late polling does not generate bursts of missed repeats.
+- The initial button-driver stage runs state-only polling without a menu
+  handler. It does not change E001, start sensor assignment or enable heaters;
+  these actions will be wired when the service UI is implemented.
 
 ## 9. AcroSched Constraints
 

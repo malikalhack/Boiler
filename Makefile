@@ -23,6 +23,7 @@ LDLIBS      := -Llib -lacrosched
 SOURCES     := $(SRC_DIR)/main.c $(SRC_DIR)/storage.c \
 			   $(SRC_DIR)/display.c \
 			   $(SRC_DIR)/feedback.c \
+			   $(SRC_DIR)/buttons.c \
 			   $(BSP_DIR)/bsp.c
 OBJECTS     := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SOURCES))
 ELF         := $(BUILD_DIR)/$(TARGET).elf
@@ -60,10 +61,15 @@ test:
 	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Itests/stubs -I$(INC_DIR) -Ilib \
 		-I$(BSP_DIR) tests/display_test.c $(SRC_DIR)/display.c \
 		$(SRC_DIR)/feedback.c \
+		$(SRC_DIR)/buttons.c \
 		-o $(BUILD_DIR)/tests/display_test
 	$(BUILD_DIR)/tests/display_test
 	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Itests/stubs -I$(INC_DIR) -Ilib \
 		-I$(BSP_DIR) tests/storage_test.c $(SRC_DIR)/storage.c \
 		-o $(BUILD_DIR)/tests/storage_test
 	$(BUILD_DIR)/tests/storage_test
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Itests/stubs -I$(INC_DIR) -Ilib \
+		-I$(BSP_DIR) tests/buttons_test.c $(SRC_DIR)/buttons.c \
+		-o $(BUILD_DIR)/tests/buttons_test
+	$(BUILD_DIR)/tests/buttons_test
 	$(PYTHON) -m unittest discover -s tests -p '*_test.py'

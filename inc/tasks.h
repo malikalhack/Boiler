@@ -17,7 +17,8 @@
  */
 typedef enum ETask {
     eTaskDisplay = 1,
-    eTaskFeedback
+    eTaskFeedback,
+    eTaskButtons
 } ETask_t;
 
 /**
@@ -30,5 +31,10 @@ typedef enum ETask {
  * @brief Feedback task dispatch priority.
  */
 #define TASK_PRIORITY_FEEDBACK (0U)
+/**
+ * @def TASK_PRIORITY_BUTTONS
+ * @brief Button polling dispatch priority.
+ */
+#define TASK_PRIORITY_BUTTONS (0U)
 /******************************************************************************/
 #endif // !TASKS_H
