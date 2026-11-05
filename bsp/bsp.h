@@ -113,5 +113,11 @@ EResult_t bspEepromUpdate(uint16_t address, const uint8_t *data, uint16_t size);
  * @returns EEPROM capacity in bytes.
  */
 uint16_t bspEepromSize(void);
+
+/**
+ * @brief Check whether an EEPROM access can start without waiting.
+ * @returns True when the EEPROM write engine is idle.
+ */
+bool bsp_eeprom_ready(void);
 /******************************************************************************/
 #endif // !BSP_H

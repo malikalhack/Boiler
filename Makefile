@@ -34,6 +34,7 @@ SOURCES     := $(SRC_DIR)/main.c $(SRC_DIR)/storage.c \
 			   $(SRC_DIR)/feedback.c \
 			   $(SRC_DIR)/buttons.c \
 			   $(SRC_DIR)/sensors_fake.c \
+			   $(SRC_DIR)/menu.c \
 			   $(BSP_DIR)/bsp.c
 OBJECTS     := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SOURCES))
 ELF         := $(BUILD_DIR)/$(TARGET).elf
@@ -110,4 +111,11 @@ test:
 				$(BUILD_DIR)/tests/config_startup_test || exit 1; \
 		done; \
 	done
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+		-Itests/stubs -I$(INC_DIR) -Ilib -I$(BSP_DIR) -DSENSORS_USE_FAKE=1 \
+		tests/menu_test.c $(SRC_DIR)/menu.c $(SRC_DIR)/storage.c \
+		$(SRC_DIR)/config.c $(SRC_DIR)/sensors_fake.c $(SRC_DIR)/display.c \
+		$(SRC_DIR)/feedback.c $(SRC_DIR)/buttons.c \
+		-o $(BUILD_DIR)/tests/menu_test
+	$(BUILD_DIR)/tests/menu_test
 	$(PYTHON) -m unittest discover -s tests -p '*_test.py'

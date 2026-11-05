@@ -42,6 +42,7 @@ typedef struct SBoilerConfig {
  * @retval eResultOk A valid record is cached.
  * @retval eResultNoConfig Both records are absent or invalid.
  * @retval eResultOutOfRange The configuration slots exceed EEPROM capacity.
+ * @retval eResultBusy A cooperative save is still in progress.
  * @returns Other failures are propagated from the EEPROM backend.
  */
 EResult_t storageInit(void);
@@ -62,8 +63,32 @@ EResult_t storageGet(SBoilerConfig_t *config);
  * @retval eResultInvalidArgument Configuration is NULL.
  * @retval eResultOutOfRange The configuration slots exceed EEPROM capacity.
  * @retval eResultVerifyFailed Record readback or integrity checks failed.
+ * @retval eResultBusy A cooperative save is still in progress.
  * @returns Other failures are propagated from the EEPROM backend.
  */
 EResult_t storageSave(const SBoilerConfig_t *config);
+
+/**
+ * @brief Begin a cooperative save of a complete configuration.
+ * @param[in] config Configuration copied into the transaction buffer.
+ * @retval eResultOk Transaction accepted; call storage_save_poll each tick.
+ * @retval eResultBusy Another save or hardware write is in progress.
+ * @returns Other errors follow storageSave.
+ * @details Does not write during this call. Do not call storageInit or
+ * storageSave during the transaction. Once started, poll until completion.
+ */
+EResult_t storage_save_begin(const SBoilerConfig_t *config);
+
+/**
+ * @brief Advance a save without waiting for the EEPROM write engine.
+ * @retval eResultBusy Transaction is still in progress.
+ * @retval eResultOk Complete record was committed and verified.
+ * @retval eResultNotReady No transaction has been started.
+ * @returns Specific EEPROM or verification failure on error.
+ * @details Each call writes at most one byte or performs one read/verify step.
+ * Failed saves leave the cached active configuration unchanged. The final
+ * result remains available until the next transaction.
+ */
+EResult_t storage_save_poll(void);
 /******************************************************************************/
 #endif // !STORAGE_H

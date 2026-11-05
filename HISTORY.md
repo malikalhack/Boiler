@@ -228,6 +228,107 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
 
 ## 2026-11-05
 
+### Startup service re-entry
+
+- Implemented the agreed Left+Right startup gesture: hold before reset/power-on,
+  pass normal debounce and hold another 3 s. It opens service with a valid
+  record or from any diagnostic, including E004, without erasing EEPROM.
+  Early release cancels the attempt; normal display/button tasks keep running.
+- Cancellation preserves old assignments and restores their idle/error screen;
+  changing fake presence can then produce a new ordinary diagnostic. Service
+  owns the display until the saved configuration has actually been applied.
+- Fixed menu bookkeeping after application: read the actual fake presence,
+  rather than replacing its UI mask with the build's startup default.
+  Applying configuration does not reinitialize or reconnect fake devices.
+- Added regressions for P1 assigned to either fixture, startup holds at exact
+  boundaries and across tick wrap, early release, re-entry from valid/E002/
+  E003/E004 states, cancellation and reassignment with old records present.
+  The reported immediate E004 after P1/first-fixture application has not been
+  reproduced in end-to-end host tests; hardware rechecking remains necessary.
+- Verification: `make test` passed, including original regression suites,
+  exact 20 ms + 3 s startup timing, cancelled/late gestures and application
+  on a sensor-monitor tick boundary. Focused ASan/UBSan tests also passed.
+  Normal, RAM-test and menu AVR builds passed; menu firmware uses 7798 bytes
+  Flash / 426 bytes static RAM with AVR-GCC 5.4.0. The installed MPLAB
+  AVR-GCC 7.3.0 also built it successfully (7768 bytes Flash / 426 bytes RAM).
+- A temporary standalone diagnostic, kept outside project sources, confirmed
+  hardware button masks: idle 00, Left 08, Right 02, both 10. Reset through
+  the programmer with both held showed startup/current masks 10/10.
+  The user found an Enter button fault and will repair it. Menu re-entry and
+  the immediate E004 report still require retesting with the main image.
+- Main-firmware diagnostics captured an initial raw mask of 15, followed by
+  the correct debounced Left+Right mask of 10. The exact-match startup gate
+  had already disarmed service entry. Initial eligibility now requires both
+  chord bits but tolerates extra active inputs while levels settle; the
+  existing debounce/hold checks still require the exact combination.
+  Added regressions for every initial superset, including the observed 15,
+  and for rejection of persistent extra keys. Removed temporary diagnostics.
+  Verification: `make test` passed all C suites and 26 Python tests; normal,
+  RAM-test and menu AVR builds passed. Menu firmware uses 7800 bytes Flash /
+  426 bytes static RAM with AVR-GCC 5.4.0.
+  Hardware verification: the user confirmed that startup Left+Right now
+  opens profile selection. A subsequent board test confirmed successful
+  configuration/application with four dashes displayed. The earlier immediate
+  E004 did not recur in this test; its original cause has not been established.
+
+### E001 sensor assignment menu
+
+- Removed donE and its extra Enter confirmation. Enter on SAVE now starts
+  the cooperative transaction; final verification leads directly to applying
+  the record and restoring the idle/diagnostic screen without reset or beep.
+  Keys stay locked through the handoff; write failures retain retry/cancel.
+  Updated regressions for automatic completion, held Enter, changed presence
+  during saving and all sensor-monitor phases.
+  Verification: `make test` passed all C suites and 26 Python tests.
+  `make -B all BUILD_DIR=output/menu-test FAKE_SENSORS=1 TEST_CONFIG=0
+  FAKE_PRESENT=1` passed (7776 bytes Flash / 420 bytes static RAM).
+- Hardware verification: the user clarified the actual build command:
+  `make -B all BUILD_DIR=output/menu-test FAKE_SENSORS=1 TEST_CONFIG=0`.
+  Without an override, FAKE_PRESENT defaults to 3 (both devices).
+  P2 assignment produced four dashes both after application and power cycling.
+  Startup service opened at P1 with both presence points: the menu initializes
+  a new candidate at P1, independently of the saved P2 record; entering or
+  cancelling service does not overwrite that record. No build/runtime
+  mismatch is indicated by these results.
+- Replaced the CHCK prompt with CONF (confirm), avoiding the seven-segment
+  K approximation. Verification and confirmation behavior are unchanged;
+  updated the menu test and user/specification documentation.
+- Restored the copyright line in all project-owned C source/header file
+  headers, including tests/stubs, and documented ESaveStage with @enum/@brief.
+- Added the agreed Enter-only entry from E001, profile selection with Up/Down,
+  S1/S2 assignment, CHCK, explicit SAVE and donE confirmation. Assignment
+  changes remain in RAM until the entire procedure succeeds and is confirmed.
+- Right cycles fake device presence; decimal points in the first two digits
+  indicate the two fixtures. ROM matching, not fixture/discovery order,
+  defines locations. Left cancels before writing; Enter retries failed steps.
+- Added cooperative EEPROM saving: readiness checks, at most one byte per
+  poll, payload verification, commit and final readback. The existing blocking
+  save API remains available for startup/tests and rejects concurrent saves.
+  Keys are locked during writing; specific save errors remain available through
+  the menu result API, with E001 and retry/cancel on screen.
+- Ordinary diagnostics yield the display during service. After donE, Enter
+  applies the verified EEPROM cache without an MCU reset or another beep.
+  All heater outputs stay off. RAM-only test builds retain their no-EEPROM
+  behavior; the menu requires fake sensors with CONFIG_USE_TEST=0.
+- Applying a saved configuration runs in the service task rather than the
+  button callback. The EEPROM format, startup scan, slot selection rules and
+  existing sensor/button representations remain unchanged.
+- Verification: `make test` and all three AVR builds passed: `make -B all`,
+  `make -B all BUILD_DIR=output/test-config FAKE_SENSORS=1 TEST_CONFIG=1`,
+  and `make -B all BUILD_DIR=output/menu-test FAKE_SENSORS=1 TEST_CONFIG=0
+  OPT_FLAGS='-Os -fstack-usage'`. Tests exercise actual debounced button
+  events, both profiles, prompt/error/decimal-point frames, held Enter,
+  cancellation, duplicate ROMs, pre-save rechecks, all 42 byte-write failure
+  points, failed readback, corrupted payload/commit, retry, preservation of a
+  previous record, application without another beep and EEPROM reload on boot.
+  The focused menu suite also passed AddressSanitizer/UndefinedBehaviorSanitizer,
+  including rejection of Enter chords.
+- Menu firmware uses 7358 bytes Flash and 420 bytes static RAM, leaving
+  604 bytes of the ATmega16A's 1024-byte SRAM for stack. Compiler stack-usage
+  output and scheduler callback frames were inspected. Normal firmware uses
+  3568 bytes Flash / 254 bytes static RAM; RAM-test firmware remains at
+  4194 bytes / 273 bytes. Hardware and MPLAB menu verification are pending.
+
 ### Configuration and assigned-sensor diagnostics
 
 - Added application-level profile/ROM validation above the unchanged EEPROM

@@ -108,7 +108,27 @@
 #define STORAGE_RECORD_SIZE \
     (STORAGE_MARKER_OFFSET + 1U)
 
+/**
+ * @enum ESaveStage
+ * @brief Stages of a cooperative EEPROM configuration save transaction.
+ */
+typedef enum ESaveStage {
+    eSaveIdle = 0,
+    eSaveInvalidate,
+    eSavePayload,
+    eSaveVerify,
+    eSaveCommit,
+    eSaveFinish
+} ESaveStage_t;
+
 /****************************** Module variables ******************************/
+
+static ESaveStage_t save_stage;
+static EResult_t save_result = eResultNotReady;
+static uint8_t save_record[STORAGE_RECORD_SIZE];
+static uint8_t save_slot;
+static uint8_t save_offset;
+static uint16_t save_sequence;
 
 static SBoilerConfig_t current_config; ///< Currently selected configuration.
 static uint8_t active_slot; ///< EEPROM slot containing current_config.
@@ -342,6 +362,9 @@ EResult_t storageInit(void) {
     uint8_t slot;
     EResult_t result;
 
+    if (save_stage != eSaveIdle) {
+        return eResultBusy;
+    }
     has_config = false;
     storage_initialized = false;
     if (!boilerStorageLayoutValid()) {
@@ -370,7 +393,6 @@ EResult_t storageInit(void) {
     else {
         return eResultNoConfig;
     }
-
     boilerStorageDecode(records[selected_slot], &current_config);
     current_sequence = boilerStorageReadSequence(records[selected_slot]);
     active_slot = selected_slot;
@@ -404,6 +426,9 @@ EResult_t storageSave(const SBoilerConfig_t *config) {
 
     if (config == NULL) {
         return eResultInvalidArgument;
+    }
+    if (save_stage != eSaveIdle) {
+        return eResultBusy;
     }
 
     if (!storage_initialized) {
@@ -462,5 +487,102 @@ EResult_t storageSave(const SBoilerConfig_t *config) {
     active_slot = target_slot;
     has_config = true;
     return eResultOk;
+}
+/******************************************************************************/
+
+EResult_t storage_save_begin(const SBoilerConfig_t *config) {
+    EResult_t result;
+
+    if (config == NULL) {
+        return eResultInvalidArgument;
+    }
+    if ((save_stage != eSaveIdle) || !bsp_eeprom_ready()) {
+        return eResultBusy;
+    }
+    if (!storage_initialized) {
+        result = storageInit();
+        if ((result != eResultOk) && (result != eResultNoConfig)) {
+            return result;
+        }
+    }
+    if (!boilerStorageLayoutValid()) {
+        return eResultOutOfRange;
+    }
+    save_slot = has_config ? (uint8_t)(active_slot ^ 1U) : 0U;
+    save_sequence = has_config ? (uint16_t)(current_sequence + 1U) : 0U;
+    boilerStorageEncode(config, save_sequence, save_record);
+    save_offset = 0U;
+    save_result = eResultBusy;
+    save_stage = eSaveInvalidate;
+    return eResultOk;
+}
+/*----------------------------------------------------------------------------*/
+
+EResult_t storage_save_poll(void) {
+    uint8_t verify[STORAGE_RECORD_SIZE];
+    uint8_t marker;
+    uint16_t address;
+    EResult_t result = eResultOk;
+
+    if (save_stage == eSaveIdle) {
+        return save_result;
+    }
+    if (!bsp_eeprom_ready()) {
+        return eResultBusy;
+    }
+    address = boilerStorageGetAddress(save_slot);
+    switch (save_stage) {
+        case eSaveInvalidate:
+            marker = STORAGE_EMPTY_MARKER;
+            result = bspEepromUpdate(address + STORAGE_MARKER_OFFSET,
+                                     &marker, sizeof(marker));
+            save_stage = eSavePayload;
+            break;
+        case eSavePayload:
+            result = bspEepromUpdate(address + save_offset,
+                                     &save_record[save_offset], 1U);
+            save_offset++;
+            if (save_offset == STORAGE_MARKER_OFFSET) {
+                save_stage = eSaveVerify;
+            }
+            break;
+        case eSaveVerify:
+            result = boilerStorageReadRecord(save_slot, verify);
+            if ((result == eResultOk) &&
+                (memcmp(save_record, verify, STORAGE_MARKER_OFFSET) != 0)) {
+                result = eResultVerifyFailed;
+            }
+            save_stage = eSaveCommit;
+            break;
+        case eSaveCommit:
+            marker = STORAGE_COMMIT_MARKER;
+            result = bspEepromUpdate(address + STORAGE_MARKER_OFFSET,
+                                     &marker, sizeof(marker));
+            save_stage = eSaveFinish;
+            break;
+        case eSaveFinish:
+            result = boilerStorageReadRecord(save_slot, verify);
+            if ((result == eResultOk) &&
+                (!boilerStorageRecordValid(verify) ||
+                 (memcmp(save_record, verify, STORAGE_RECORD_SIZE) != 0))) {
+                result = eResultVerifyFailed;
+            }
+            if (result == eResultOk) {
+                boilerStorageDecode(verify, &current_config);
+                current_sequence = save_sequence;
+                active_slot = save_slot;
+                has_config = true;
+            }
+            save_stage = eSaveIdle;
+            break;
+        default:
+            result = eResultNotReady;
+            break;
+    }
+    if ((result != eResultOk) || (save_stage == eSaveIdle)) {
+        save_result = result;
+        save_stage = eSaveIdle;
+    }
+    return save_stage == eSaveIdle ? save_result : eResultBusy;
 }
 /******************************************************************************/

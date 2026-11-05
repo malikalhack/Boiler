@@ -1,4 +1,5 @@
 /**
+ * @copyright @showdate "%Y " Anton Chernov. All rights reserved.
  * @file    sensors_fake.c
  * @version 0.1.4
  * @authors Anton Chernov
@@ -138,6 +139,26 @@ EResult_t sensors_fake_set_temperature(uint8_t index, int16_t temperature) {
         return eResultOutOfRange;
     }
     temperatures[index] = temperature;
+    return eResultOk;
+}
+/******************************************************************************/
+
+EResult_t sensors_fake_get_presence(uint8_t *presence) {
+    uint8_t index;
+    uint8_t mask = 0U;
+
+    if (presence == NULL) {
+        return eResultInvalidArgument;
+    }
+    if (!initialized) {
+        return eResultNotReady;
+    }
+    for (index = 0U; index < SENSOR_FAKE_COUNT; index++) {
+        if (connected[index]) {
+            mask |= 1U << index;
+        }
+    }
+    *presence = mask;
     return eResultOk;
 }
 /******************************************************************************/

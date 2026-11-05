@@ -46,6 +46,13 @@ typedef enum EDisplayGlyph {
     eGlyph9     = 0x6F,
     eGlyphDash  = 0x40,
     eGlyphE     = 0x79,
+    eGlyphP     = 0x73,
+    eGlyphC     = 0x39,
+    eGlyphH     = 0x76,
+    eGlyphF     = 0x71,
+    eGlyphA     = 0x77,
+    eGlyphV     = 0x3E,
+    eGlyphN     = 0x54,
     eGlyphPoint = 0x80
 } EDisplayGlyph_t;
 
@@ -68,6 +75,18 @@ void display_init(void);
  * @brief Show four dashes without changing LED states.
  */
 void display_show_dashes(void);
+
+/**
+ * @brief Queue the four digits from a frame, preserving pending LED bits.
+ * @param[in] frame Digit patterns; its LED slot is ignored.
+ */
+void display_set_digits(SDisplayFrame_t frame);
+
+/**
+ * @brief Set decimal points independently of glyphs and LED bits.
+ * @param[in] mask Bit 0 controls K1 point, bit 1 K2, and so on.
+ */
+void display_set_points(uint8_t mask);
 
 /**
  * @brief Queue a complete frame for the next K1 slot.

@@ -1,4 +1,5 @@
 /**
+ * @copyright @showdate "%Y " Anton Chernov. All rights reserved.
  * @file    sensors_fake.h
  * @version 0.1.4
  * @authors Anton Chernov
@@ -39,6 +40,16 @@ EResult_t sensors_fake_get_rom(uint8_t index, SSensorRom_t *rom);
  * @retval eResultNotReady sensors_init has not been called.
  */
 EResult_t sensors_fake_set_present(uint8_t index, bool present);
+
+/**
+ * @brief Read the current connected fixture mask without changing the backend.
+ * @param[out] presence Bit 0 for fixture 0, bit 1 for fixture 1.
+ * @retval eResultOk Mask copied.
+ * @retval eResultInvalidArgument Output is NULL.
+ * @retval eResultNotReady sensors_init has not been called.
+ * @details Output is unchanged on failure.
+ */
+EResult_t sensors_fake_get_presence(uint8_t *presence);
 
 /**
  * @brief Set a simulated device's temperature, including while disconnected.

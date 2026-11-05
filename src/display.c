@@ -55,6 +55,26 @@ void display_show_dashes(void) {
 }
 /*----------------------------------------------------------------------------*/
 
+void display_set_digits(SDisplayFrame_t frame) {
+    uint8_t digit;
+
+    for (digit = 0U; digit < DISPLAY_DIGITS; digit++) {
+        pending_frame.slots[digit] = frame.slots[digit];
+    }
+}
+/*----------------------------------------------------------------------------*/
+
+void display_set_points(uint8_t mask) {
+    uint8_t digit;
+
+    for (digit = 0U; digit < DISPLAY_DIGITS; digit++) {
+        pending_frame.slots[digit] =
+            (pending_frame.slots[digit] & (uint8_t)~eGlyphPoint) |
+            ((mask & (1U << digit)) != 0U ? eGlyphPoint : 0U);
+    }
+}
+/*----------------------------------------------------------------------------*/
+
 void display_set_leds(uint8_t mask, uint8_t value) {
     pending_frame.slots[DISPLAY_DIGITS] =
         (pending_frame.slots[DISPLAY_DIGITS] & (uint8_t)~mask) |

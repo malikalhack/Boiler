@@ -249,7 +249,7 @@ Any failure disables both heater outputs.
 
 The explicit `SENSORS_USE_FAKE=1` build option enables an isolated test
 implementation; normal builds default to zero. It does not use GPIO, 1-Wire,
-EEPROM or heater outputs. The current firmware startup does not call it.
+EEPROM or heater outputs. Fake-enabled firmware initializes it at startup.
 
 The backend provides discovery and temperature reads addressed by complete
 ROM, with two fixed DS18B20-family ROMs containing valid Dallas CRC bytes.
@@ -319,9 +319,20 @@ firmware without a programmer.
 
 ### 5.1. Entering Service Mode
 
-At startup, hold `Left + Right`. The combination must pass normal debounce and
-remain held for several seconds. Both heater outputs remain disabled while the
-combination and service procedure are being evaluated.
+Press `Enter` while E001 is displayed to start assignment.
+
+For re-entry regardless of configuration validity or the displayed error,
+hold `Left + Right` before power-on/reset. After normal debounce, keep the
+combination held for 3 seconds until profile selection appears, then release
+the keys. Releasing early cancels the startup attempt. Pressing the combination
+later during ordinary operation does not open service. Timing is non-blocking
+and handles tick wrap; a raw release prevents entry at the hold boundary.
+The initial sample requires both Left and Right but tolerates extra active
+inputs while levels settle. The exact combination must appear within the
+normal debounce interval; extra keys that remain pressed reject entry.
+Both heater outputs remain disabled while the combination and service procedure
+are being evaluated. A valid old configuration remains unchanged until a
+complete replacement has been confirmed, committed and verified.
 
 ### 5.2. Assignment Sequence
 
@@ -335,7 +346,7 @@ S1?      connect only the sensor at location 1, press Enter
 S1OK     keep the ROM code in temporary RAM
 CHECK    verify the single connected sensor, press Enter
 SAVE?    confirm the EEPROM write with Enter
-DONE     verify the record and restart
+DONE     verify the record; Enter applies the saved configuration
 ```
 
 For `TWO_CHANNEL`:
@@ -348,7 +359,7 @@ S2?      disconnect the sensor at location 1, press Enter
 S2OK     keep the second ROM code in temporary RAM
 CHECK    connect both sensors, press Enter
 SAVE?    confirm the EEPROM write with Enter
-DONE     verify the record and restart
+DONE     verify the record; Enter applies the saved configuration
 ```
 
 Exactly the number of suitable devices required by the selected profile must
@@ -360,6 +371,52 @@ The new ROM codes must not replace the active configuration before the complete
 procedure succeeds. If the procedure is interrupted, the previous valid
 configuration remains unchanged. If no previous configuration exists, the
 device remains in the error state.
+
+### 5.3. Four-Digit Service UI and Fake Controls
+
+The current service is enabled with `SENSORS_USE_FAKE=1` and
+`CONFIG_USE_TEST=0`. Unlike the RAM configuration test mode, this service
+**writes EEPROM after explicit confirmation**. Heater outputs stay off.
+
+| Screen | Action |
+| --- | --- |
+| `P  1` / `P  2` | Up/Down select single/two-channel profile; Enter confirms |
+| `S1  ` | Leave one device present; Enter discovers and assigns its ROM |
+| `S2  ` | Leave the other device present; Enter assigns it |
+| `CONF` | Connect all required devices; Enter verifies assignments/readings |
+| `SAVE` | Enter rechecks devices, confirms writing and automatically applies the verified record |
+
+Letters use seven-segment approximations, including N and V. Successful
+assignment immediately advances to the next prompt; S1OK/S2OK are conceptual
+states, not additional confirmation screens. At each assignment step exactly
+one suitable device must be present. Two-channel assignments must be distinct.
+
+Right cycles simulated presence: neither -> first -> second -> both -> neither.
+The first two digit decimal points indicate fixture presence, independently
+of assigned locations. Right never writes EEPROM or assigns a ROM by index.
+This is a test control, not a feature for the real sensor backend.
+
+Left cancels any step before writing and restores the previous diagnostic
+screen (or dashes) with no EEPROM change. Changing fake presence during
+service can produce a new ordinary diagnostic after cancellation, without
+changing the old assignments. Failed measurements/checks display their error;
+Enter retries the
+same operation and Left cancels. Failed EEPROM writes/readback preserve the
+old cached configuration and expose the specific operation result through
+the menu diagnostic API. Their UI uses E001; Enter retries the save.
+
+Writing is cooperative: one byte is launched only when the EEPROM engine
+is ready, followed by payload readback, commit and final verification.
+All keys are ignored once writing begins, through the application handoff.
+After final verification the saved record is applied automatically without
+an additional screen, button press, reset or startup beep. Ordinary diagnostics
+do not overwrite service screens. Enter combined with another held button
+does not confirm a step. After application, the idle screen shows dashes with
+steady HL4 or the current diagnostic if sensor presence has since changed.
+Applying the saved record does not reset simulated presence to its startup
+mask. Subsequent service initialization reads actual backend presence.
+Diagnostics remain paused through the application handoff, so they cannot
+check an old assignment against the new service setup.
 
 ## 6. Missing Configuration State
 
@@ -520,9 +577,9 @@ valid configuration, the device returns to `CONFIG_INVALID`.
   a non-blocking cooperative handler. Left, Right and Enter do not repeat.
 - Raw release suspends repeats immediately, while its release event still
   requires debounce. Late polling does not generate bursts of missed repeats.
-- The initial button-driver stage runs state-only polling without a menu
-  handler. It does not change E001, start sensor assignment or enable heaters;
-  these actions will be wired when the service UI is implemented.
+- Fake-sensor builds with EEPROM configuration route button events to the
+  E001 assignment menu. RAM configuration test builds and builds without a
+  sensor backend retain state-only polling. No button event enables heaters.
 
 ## 9. AcroSched Constraints
 

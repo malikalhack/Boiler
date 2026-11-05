@@ -1,4 +1,5 @@
 /**
+ * @copyright @showdate "%Y " Anton Chernov. All rights reserved.
  * @file    buttons_test.c
  * @version 0.1.4
  * @authors Anton Chernov

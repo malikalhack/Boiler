@@ -1,4 +1,5 @@
 /**
+ * @copyright @showdate "%Y " Anton Chernov. All rights reserved.
  * @file    storage_test.c
  * @version 0.1.4
  * @authors Anton Chernov
@@ -96,6 +97,11 @@ EResult_t bspEepromUpdate(uint16_t address, const uint8_t *data, uint16_t size) 
 
 uint16_t bspEepromSize(void) {
     return capacity;
+}
+/*----------------------------------------------------------------------------*/
+
+bool bsp_eeprom_ready(void) {
+    return true;
 }
 
 /****************************** Private functions *****************************/

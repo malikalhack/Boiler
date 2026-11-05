@@ -54,6 +54,40 @@ macros: `SENSORS_USE_FAKE=1`, `CONFIG_USE_TEST=1`,
 `CONFIG_TEST_PROFILE=2`, `SENSOR_FAKE_PRESENT_MASK=1`.
 Remove the test macros to return to the normal build.
 
+#### Sensor assignment menu (fake sensors)
+
+```sh
+make -B all BUILD_DIR=output/menu-test FAKE_SENSORS=1 TEST_CONFIG=0
+```
+
+Flash `output/menu-test/boiler.hex`. With missing/invalid EEPROM configuration
+the display shows E001; press Enter to start. **This build writes EEPROM
+after confirmation at SAVE.** It does not enable heaters.
+
+- `P  1` / `P  2`: Up/Down select the profile, Enter confirms.
+- `S1` / `S2`: Enter assigns the sole present device.
+- Right cycles fake presence: none, first, second, both. Decimal points in
+  digits 1 and 2 show which fixtures are present.
+- `CONF`: Enter checks all assigned devices.
+- `SAVE`: Enter confirms writing; after verification the configuration is
+  applied automatically, without another confirmation or reset.
+- Left cancels before writing. On errors, Enter retries and Left cancels.
+
+For two channels, use first-only at S1, second-only at S2, then both at CONF.
+For one channel, leave just its assigned device present.
+Enter opens the menu from E001. To reconfigure a valid record or enter from
+another error, hold **Left+Right before power-on/reset**, then keep holding
+for 3 seconds after button debounce, until `P  1` appears. Release the keys
+before navigating. This gesture works only at startup; releasing early
+cancels it. Cancelling service preserves the old EEPROM configuration.
+
+For MPLAB, regenerate CMake and set `SENSORS_USE_FAKE=1`,
+`CONFIG_USE_TEST=0` (remove previous RAM-test macros). Presence defaults to both.
+Configuration saved by the menu is loaded from EEPROM on subsequent starts.
+Fake presence resets to the build's `FAKE_PRESENT` value at startup; use
+`FAKE_PRESENT=1` for a single-channel configuration assigned to the first
+fixture, otherwise the default second fixture is correctly reported as E004.
+
 #### Version and pull requests
 
 `VERSION` contains the project version (`MAJOR.MINOR.PATCH`), initially `0.1.0`.

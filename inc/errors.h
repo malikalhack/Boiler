@@ -1,4 +1,5 @@
 /**
+ * @copyright @showdate "%Y " Anton Chernov. All rights reserved.
  * @file    errors.h
  * @version 0.1.4
  * @authors Anton Chernov
@@ -25,7 +26,8 @@ typedef enum EResult {
     eResultWriteFailed     = 5, /**< EEPROM backend could not write data. */
     eResultVerifyFailed    = 6, /**< Readback does not match the saved record. */
     eResultNotFound        = 7, /**< Addressed device is absent or unknown. */
-    eResultNotReady        = 8  /**< Module has not been initialized. */
+    eResultNotReady        = 8, /**< Module has not been initialized. */
+    eResultBusy            = 9  /**< An operation is still in progress. */
 } EResult_t;
 
 /**

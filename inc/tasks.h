@@ -1,4 +1,5 @@
 /**
+ * @copyright @showdate "%Y " Anton Chernov. All rights reserved.
  * @file    tasks.h
  * @version 0.1.4
  * @authors Anton Chernov
@@ -19,7 +20,8 @@ typedef enum ETask {
     eTaskDisplay = 1,
     eTaskFeedback,
     eTaskButtons,
-    eTaskSensors
+    eTaskSensors,
+    eTaskMenu
 } ETask_t;
 
 /**
@@ -42,5 +44,10 @@ typedef enum ETask {
  * @brief Fake sensor diagnostic dispatch priority.
  */
 #define TASK_PRIORITY_SENSORS (0U)
+/**
+ * @def TASK_PRIORITY_MENU
+ * @brief Assignment service dispatch priority.
+ */
+#define TASK_PRIORITY_MENU (0U)
 /******************************************************************************/
 #endif // !TASKS_H

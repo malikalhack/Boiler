@@ -1,4 +1,5 @@
 /**
+ * @copyright @showdate "%Y " Anton Chernov. All rights reserved.
  * @file    sensors_test.c
  * @version 0.1.4
  * @authors Anton Chernov
@@ -57,6 +58,7 @@ static void test_initialization(void) {
     SSensorRom_t sentinel;
     uint8_t count = TEST_SENTINEL;
     int16_t temperature = TEST_SENTINEL;
+    uint8_t presence = TEST_SENTINEL;
 
     memset(&sentinel, TEST_SENTINEL, sizeof(sentinel));
     output = sentinel;
@@ -68,7 +70,12 @@ static void test_initialization(void) {
     assert(temperature == TEST_SENTINEL);
     assert(sensors_fake_set_present(0U, false) == eResultNotReady);
     assert(sensors_fake_set_temperature(0U, 0) == eResultNotReady);
+    assert(sensors_fake_get_presence(&presence) == eResultNotReady);
+    assert(presence == TEST_SENTINEL);
+    assert(sensors_fake_get_presence(NULL) == eResultInvalidArgument);
     sensors_init();
+    assert(sensors_fake_get_presence(&presence) == eResultOk);
+    assert(presence == (1U << SENSOR_FAKE_COUNT) - 1U);
 }
 /*----------------------------------------------------------------------------*/
 
@@ -80,6 +87,7 @@ static void test_discovery(void) {
     uint8_t mask;
     uint8_t index;
     uint8_t expected;
+    uint8_t presence;
     int16_t temperature;
 
     sensors_init();
@@ -100,6 +108,8 @@ static void test_discovery(void) {
             assert(sensors_fake_set_present(
                 index, (mask & (1U << index)) != 0U) == eResultOk);
         }
+        assert(sensors_fake_get_presence(&presence) == eResultOk);
+        assert(presence == mask);
         memcpy(roms, sentinel, sizeof(roms));
         assert(sensors_search(roms, SENSOR_FAKE_COUNT, &count) == eResultOk);
         expected = 0U;
