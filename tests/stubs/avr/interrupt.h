@@ -1,6 +1,6 @@
 /**
  * @file    interrupt.h
- * @version 0.1.1
+ * @version 0.1.2
  * @authors Anton Chernov
  * @date    2026-11-03
  * @date    @showdate "%Y-%m-%d"
