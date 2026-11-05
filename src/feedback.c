@@ -1,6 +1,6 @@
 /**
  * @file    feedback.c
- * @version 0.1.3
+ * @version 0.1.4
  * @authors Anton Chernov
  * @date    2026-11-04
  * @date    @showdate "%Y-%m-%d"
