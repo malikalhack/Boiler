@@ -12,6 +12,7 @@
 /******************************** Included files ******************************/
 #include <stdbool.h>
 
+#include "boiler_config.h"
 #include "sensors.h"
 /********************************* Definitions ********************************/
 /**
@@ -19,6 +20,12 @@
  * @brief Number of simulated devices; indices are fixtures, not locations.
  */
 #define SENSOR_FAKE_COUNT (2U)
+
+/**
+ * @def SENSOR_FAKE_STEP_TICKS
+ * @brief Interval between simulated 0.1 C steps, 500 ms.
+ */
+#define SENSOR_FAKE_STEP_TICKS (BOILER_TICK_HZ / 2U)
 
 /********************** Application Programming Interface *********************/
 /**
@@ -62,5 +69,24 @@ EResult_t sensors_fake_get_presence(uint8_t *presence);
  * @details No state changes on failure. Controls are cooperative/startup only.
  */
 EResult_t sensors_fake_set_temperature(uint8_t index, int16_t temperature);
+
+/**
+ * @brief Start both fixtures at -55 C and enable the repeating test sweep.
+ * @param[in] now Current 16-bit system tick.
+ * @retval eResultOk Sweep started; presence is unchanged.
+ * @retval eResultNotReady Backend has not been initialized.
+ */
+EResult_t sensors_fake_sweep_start(uint16_t now);
+
+/**
+ * @brief Advance both fixtures by 0.1 C per 500 ms, wrapping after +125 C.
+ * @param[in] now Current 16-bit system tick.
+ * @details Uses a tenths accumulator rounded to the nearest 1/16 C.
+ * Disconnected devices advance too. Poll gaps must be less than a tick wrap;
+ * late polls catch up elapsed steps and retain the fractional interval.
+ * @retval eResultOk Sweep updated.
+ * @retval eResultNotReady Sweep has not been started since sensors_init().
+ */
+EResult_t sensors_fake_sweep_update(uint16_t now);
 /******************************************************************************/
 #endif // !SENSORS_FAKE_H

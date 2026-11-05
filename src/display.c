@@ -10,11 +10,12 @@
 /******************************** Included files ******************************/
 #include "display.h"
 #include "bsp.h"
+#include "sensors.h"
 
 /********************************* Definitions ********************************/
 /**
  * @def DISPLAY_DECIMAL_BASE
- * @brief Radix used to format numeric error codes.
+ * @brief Radix used to format numeric values.
  */
 #define DISPLAY_DECIMAL_BASE (10U)
 
@@ -104,6 +105,44 @@ EResult_t display_show_error(EError_t error) {
     return ret_val;
 }
 
+/*----------------------------------------------------------------------------*/
+
+EResult_t display_show_temperature(int16_t temperature) {
+    SDisplayFrame_t frame = {{0U}};
+    uint16_t magnitude;
+    uint16_t value;
+    uint8_t position = DISPLAY_DIGITS;
+    bool negative = temperature < 0;
+    bool fractional;
+
+    if ((temperature < -55 * SENSOR_TEMP_SCALE) ||
+        (temperature > 125 * SENSOR_TEMP_SCALE)) {
+        return eResultOutOfRange;
+    }
+    magnitude = negative ? (uint16_t)-temperature : (uint16_t)temperature;
+    value = (magnitude * DISPLAY_DECIMAL_BASE + SENSOR_TEMP_SCALE / 2U) /
+            SENSOR_TEMP_SCALE;
+    fractional = value <= (negative ? 99U : 999U);
+    if (!fractional) {
+        value = (magnitude + SENSOR_TEMP_SCALE / 2U) / SENSOR_TEMP_SCALE;
+    }
+    if (fractional) {
+        frame.slots[--position] = digit_glyphs[value % DISPLAY_DECIMAL_BASE];
+        value /= DISPLAY_DECIMAL_BASE;
+    }
+    do {
+        frame.slots[--position] = digit_glyphs[value % DISPLAY_DECIMAL_BASE];
+        value /= DISPLAY_DECIMAL_BASE;
+    } while (value != 0U);
+    if (fractional) {
+        frame.slots[DISPLAY_DIGITS - 2U] |= eGlyphPoint;
+    }
+    if (negative) {
+        frame.slots[--position] = eGlyphDash;
+    }
+    display_set_digits(frame);
+    return eResultOk;
+}
 /*----------------------------------------------------------------------------*/
 
 void display_scan(void *context) {

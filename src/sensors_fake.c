@@ -28,6 +28,10 @@
  */
 #define SENSOR_MAX_TEMP (125 * SENSOR_TEMP_SCALE)
 
+#define SENSOR_SWEEP_MIN (-550)
+#define SENSOR_SWEEP_MAX (1250)
+#define SENSOR_SWEEP_STEPS (SENSOR_SWEEP_MAX - SENSOR_SWEEP_MIN + 1U)
+
 /****************************** Module variables ******************************/
 
 static const SSensorRom_t fixture_roms[SENSOR_FAKE_COUNT] = {
@@ -40,6 +44,9 @@ static const int16_t initial_temperatures[SENSOR_FAKE_COUNT] = {
 static bool initialized;
 static bool connected[SENSOR_FAKE_COUNT];
 static int16_t temperatures[SENSOR_FAKE_COUNT];
+static bool sweeping;
+static uint16_t sweep_last_tick;
+static uint16_t sweep_step;
 
 /********************** Application Programming Interface *********************/
 
@@ -51,6 +58,7 @@ void sensors_init(void) {
         temperatures[index] = initial_temperatures[index];
     }
     initialized = true;
+    sweeping = false;
 }
 /*----------------------------------------------------------------------------*/
 
@@ -159,6 +167,48 @@ EResult_t sensors_fake_get_presence(uint8_t *presence) {
         }
     }
     *presence = mask;
+    return eResultOk;
+}
+/*----------------------------------------------------------------------------*/
+
+EResult_t sensors_fake_sweep_start(uint16_t now) {
+    uint8_t index;
+
+    if (!initialized) {
+        return eResultNotReady;
+    }
+    sweep_last_tick = now;
+    sweep_step = 0U;
+    for (index = 0U; index < SENSOR_FAKE_COUNT; index++) {
+        temperatures[index] = SENSOR_MIN_TEMP;
+    }
+    sweeping = true;
+    return eResultOk;
+}
+/*----------------------------------------------------------------------------*/
+
+EResult_t sensors_fake_sweep_update(uint16_t now) {
+    uint16_t elapsed;
+    uint16_t steps;
+    int16_t tenths;
+    int16_t scaled;
+    uint8_t index;
+
+    if (!sweeping) {
+        return eResultNotReady;
+    }
+    elapsed = (uint16_t)(now - sweep_last_tick);
+    steps = elapsed / SENSOR_FAKE_STEP_TICKS;
+    if (steps != 0U) {
+        sweep_last_tick += steps * SENSOR_FAKE_STEP_TICKS;
+        sweep_step = (sweep_step + steps) % SENSOR_SWEEP_STEPS;
+        tenths = (int16_t)sweep_step + SENSOR_SWEEP_MIN;
+        scaled = tenths * SENSOR_TEMP_SCALE;
+        scaled = (scaled + (scaled < 0 ? -5 : 5)) / 10;
+        for (index = 0U; index < SENSOR_FAKE_COUNT; index++) {
+            temperatures[index] = scaled;
+        }
+    }
     return eResultOk;
 }
 /******************************************************************************/

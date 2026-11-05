@@ -115,9 +115,11 @@ static void check_frame(EError_t error, bool led_on) {
     for (position = 0U; position < DISPLAY_SLOTS; position++) {
         display_scan(NULL);
         assert(selected == (1U << position));
-        expected = eGlyphDash;
+        expected = position == 0U ? eGlyphBlank :
+                   position == 1U ? eGlyphDash : eGlyph5;
         if (position == DISPLAY_DIGITS) {
-            expected = led_on ? FEEDBACK_LED_MASK : 0U;
+            expected = DISPLAY_MODE3_LED_MASK |
+                       (led_on ? FEEDBACK_LED_MASK : 0U);
         }
         else if (error != eErrorNone) {
             expected = position == 0U ? eGlyphE : eGlyph0;
@@ -127,6 +129,59 @@ static void check_frame(EError_t error, bool led_on) {
             }
         }
         assert(segments == expected);
+    }
+}
+/*----------------------------------------------------------------------------*/
+
+static void test_sweep_display(void) {
+    static const uint8_t glyphs[] = {
+        eGlyph0, eGlyph1, eGlyph2, eGlyph3, eGlyph4,
+        eGlyph5, eGlyph6, eGlyph7, eGlyph8, eGlyph9
+    };
+    SDisplayFrame_t frame;
+    uint16_t step;
+    uint16_t magnitude;
+    int16_t tenths;
+    bool fractional;
+    uint8_t position;
+    uint8_t slot;
+
+    assert(sensors_fake_set_present(0U, true) == eResultOk);
+    check_sensors(NULL);
+    assert(sensors_fake_sweep_start(tick) == eResultOk);
+    for (step = 0U; step <= 1801U; step++) {
+        if (step != 0U) {
+            tick += SENSOR_FAKE_STEP_TICKS;
+        }
+        check_sensors(NULL);
+        assert(active_error == eErrorNone);
+        tenths = step == 1801U ? -550 : (int16_t)step - 550;
+        fractional = tenths >= -99 && tenths <= 999;
+        magnitude = tenths < 0 ? (uint16_t)-tenths : (uint16_t)tenths;
+        if (!fractional) {
+            magnitude = (magnitude + 5U) / 10U;
+        }
+        frame = (SDisplayFrame_t){{0U}};
+        position = DISPLAY_DIGITS;
+        do {
+            frame.slots[--position] = glyphs[magnitude % 10U];
+            magnitude /= 10U;
+        } while ((magnitude != 0U) ||
+                 (fractional && position == DISPLAY_DIGITS - 1U));
+        if (fractional) {
+            frame.slots[DISPLAY_DIGITS - 2U] |= eGlyphPoint;
+        }
+        if (tenths < 0) {
+            frame.slots[--position] = eGlyphDash;
+        }
+        frame.slots[DISPLAY_DIGITS] =
+            FEEDBACK_LED_MASK | DISPLAY_MODE3_LED_MASK;
+        for (slot = 0U; slot < DISPLAY_SLOTS; slot++) {
+            display_scan(NULL);
+            assert(selected == (1U << slot));
+            assert(segments == frame.slots[slot]);
+        }
+        assert(!buzzer);
     }
 }
 /*----------------------------------------------------------------------------*/
@@ -161,6 +216,7 @@ int main(void) {
     assert(active_error == eErrorSensor1);
     check_frame(eErrorSensor1, true);
     assert(!buzzer);
+    test_sweep_display();
     puts("RAM configuration startup tests passed");
     return 0;
 }

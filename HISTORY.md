@@ -228,6 +228,61 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
 
 ## 2026-11-05
 
+### Mode 3 temperature interface and automatic fake sweep
+
+- Agreed and implemented the first temperature screen for Mode 3, without
+  heater control or channel switching. It reads the complete ROM assigned to
+  SENSOR_1, including a single-channel profile assigned to the second fixture.
+  Existing profile checks remain: P2 still requires both assigned devices;
+  extra unassigned devices are still errors.
+- Added adaptive right-aligned formatting across -55..125 C. Round to tenths
+  first and show one decimal place within -9.9..99.9; outside that interval,
+  round the original reading to whole degrees. Halfway values round away
+  from zero. Leading zeros are blank, negative readings retain the minus
+  sign, and integer values within the fractional range retain their .0.
+  Formatting preserves all LED bits and frame-boundary latching.
+- HL7 is segment C / PA2 / bit 2 in K5. It is steadily on for configured
+  Mode 3, including sensor diagnostics, and off during assignment or E001.
+  HL4 retains its existing steady/error-blink behavior.
+- Ordinary temperature-screen buttons have no action. Left+Right at startup,
+  Enter at E001 and all existing assignment-menu controls are unchanged.
+  Reserved the upper/lower square channel markers for future two-channel UI;
+  no channel digit or marker is displayed in this single-channel stage.
+- Fake-enabled firmware explicitly starts both fixtures at -55.0 C, increases
+  them by 0.1 C every 500 ms through +125.0 C, then restarts at -55.0 C.
+  The 1801-sample cycle lasts 900.5 seconds, with each endpoint held for
+  500 ms. A tenths accumulator is converted to the nearest 1/16 C reading
+  without cumulative quantization drift. Timing handles tick wrap, late
+  polls and partial intervals. Disconnected fixtures advance too.
+- The sweep continues while assignment owns the display; save/apply does not
+  reset temperatures or presence. Returning from service rechecks the current
+  assignments before showing a temperature or diagnostic, avoiding a fatal
+  read of a sensor disconnected during service. A regression also verifies
+  immediate temperature restoration after cancellation.
+- Low-level fake initialization still supplies the original 25/30 C fixtures
+  for deterministic tests; firmware explicitly opts into the sweep. No EEPROM
+  layout or stored settings changed, no temperature is written to EEPROM,
+  and both heater outputs remain off. Extended measurement display range
+  does not alter water-temperature safety limits.
+- Verification: `make test` passed all C suites and 26 Python tests, including
+  all 2881 representable DS18B20 readings, rounding/format boundaries, LED
+  preservation, rejected out-of-range values and frame-boundary updates.
+  Sweep tests cover every 0.1 C sample, both endpoints, wrap/restart,
+  disconnected devices and delayed polls; startup tests verify complete
+  displayed cycles for both profiles and all four initial presence masks.
+  Menu tests cover ROM-based readings, inactive ordinary buttons, diagnostic
+  recovery, service display priority and save/cancel/reload behavior.
+  Focused display, fake-sensor and menu suites also passed with
+  AddressSanitizer/UndefinedBehaviorSanitizer.
+- AVR verification passed:
+  `make -B all` (3568 bytes Flash / 254 bytes static RAM);
+  `make -B all BUILD_DIR=output/test-config FAKE_SENSORS=1 TEST_CONFIG=1
+  TEST_PROFILE=1 FAKE_PRESENT=1` (4922 bytes Flash / 278 bytes static RAM);
+  `make -B all BUILD_DIR=output/menu-test FAKE_SENSORS=1 TEST_CONFIG=0`
+  (8582 bytes Flash / 426 bytes static RAM).
+- Hardware verification: the user confirmed the correct mode LED (HL7),
+  correct temperature display across -55..125 C and blank leading zeros.
+
 ### Startup service re-entry
 
 - Implemented the agreed Left+Right startup gesture: hold before reset/power-on,

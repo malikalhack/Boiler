@@ -360,8 +360,9 @@ static void finish_save(void) {
 static void test_success(bool two) {
     SBoilerConfig_t config;
     SSensorRom_t rom;
-    SDisplayFrame_t dashes = {
-        {eGlyphDash, eGlyphDash, eGlyphDash, eGlyphDash, FEEDBACK_LED_MASK}
+    SDisplayFrame_t temperature = {
+        {eGlyphBlank, eGlyphDash, eGlyph5, eGlyph5,
+         FEEDBACK_LED_MASK | DISPLAY_MODE3_LED_MASK}
     };
 
     reset_board();
@@ -394,7 +395,7 @@ static void test_success(bool two) {
     assert(active_error == eErrorNone);
     assert(!menu_is_active());
     assert(!buzzer);
-    check_frame(dashes, 0U);
+    check_frame(temperature, 0U);
     assert(storageInit() == eResultOk);
     assert(storageGet(&config) == eResultOk);
     assert(config_validate(&config) == eResultOk);
@@ -607,6 +608,17 @@ static void test_single_fixture_application(uint8_t presence) {
     assert(!buzzer);
     assert(sensors_fake_get_presence(&actual_presence) == eResultOk);
     assert(actual_presence == presence);
+    assert(sensors_fake_set_temperature(0U, 25 * SENSOR_TEMP_SCALE) ==
+           eResultOk);
+    assert(sensors_fake_set_temperature(1U, 30 * SENSOR_TEMP_SCALE) ==
+           eResultOk);
+    check_sensors(NULL);
+    check_frame((SDisplayFrame_t){{eGlyphBlank,
+                                  presence == 1U ? eGlyph2 : eGlyph3,
+                                  (presence == 1U ? eGlyph5 : eGlyph0) |
+                                  eGlyphPoint, eGlyph0,
+                                  FEEDBACK_LED_MASK | DISPLAY_MODE3_LED_MASK}},
+                0U);
     advance(2U * FEEDBACK_BLINK_TICKS);
     assert(active_error == eErrorNone);
     assert(sensors_fake_get_presence(&actual_presence) == eResultOk);
@@ -617,6 +629,72 @@ static void test_single_fixture_application(uint8_t presence) {
                 presence);
     press(eButtonLeft);
     assert(menu_get_state() == eMenuIdle);
+}
+/*----------------------------------------------------------------------------*/
+
+static void test_temperature_controls_and_service(void) {
+    static const EButton_t buttons[] = {
+        eButtonLeft, eButtonRight, eButtonUp, eButtonDown, eButtonEnter
+    };
+    SBoilerConfig_t before;
+    SBoilerConfig_t after;
+    uint8_t presence;
+    uint8_t index;
+    unsigned int previous_writes;
+    SDisplayFrame_t temperature = {
+        {eGlyphBlank, eGlyph2, eGlyph5 | eGlyphPoint, eGlyph0,
+         FEEDBACK_LED_MASK | DISPLAY_MODE3_LED_MASK}
+    };
+
+    test_success(true);
+    boot_board();
+    assert(storageGet(&before) == eResultOk);
+    previous_writes = writes;
+    assert(sensors_fake_set_temperature(0U, 25 * SENSOR_TEMP_SCALE) ==
+           eResultOk);
+    assert(sensors_fake_set_temperature(1U, 30 * SENSOR_TEMP_SCALE) ==
+           eResultOk);
+    check_sensors(NULL);
+    check_frame(temperature, 0U);
+    for (index = 0U; index < sizeof(buttons) / sizeof(buttons[0]); index++) {
+        raw_buttons = buttons[index];
+        buttons_poll(NULL);
+        advance(BUTTON_DEBOUNCE_TICKS);
+        raw_buttons = 0U;
+        buttons_poll(NULL);
+        advance(BUTTON_DEBOUNCE_TICKS);
+        assert(menu_get_state() == eMenuIdle);
+        assert(sensors_fake_get_presence(&presence) == eResultOk);
+        assert(presence == 3U);
+        check_frame(temperature, 0U);
+        assert(writes == previous_writes);
+    }
+    assert(storageGet(&after) == eResultOk);
+    assert(memcmp(&before, &after, sizeof(before)) == 0);
+    assert(menu_open(active_error, presence) == eResultOk);
+    check_prompt((SDisplayFrame_t){{eGlyphP, eGlyphBlank,
+                                   eGlyphBlank, eGlyph1, 0U}});
+    advance(1000U);
+    check_prompt((SDisplayFrame_t){{eGlyphP, eGlyphBlank,
+                                   eGlyphBlank, eGlyph1, 0U}});
+    press(eButtonLeft);
+    assert(!menu_is_active());
+    temperature = (SDisplayFrame_t){
+        {eGlyphBlank, eGlyphDash, eGlyph5, eGlyph5,
+         FEEDBACK_LED_MASK | DISPLAY_MODE3_LED_MASK}
+    };
+    check_frame(temperature, 0U);
+    assert(sensors_fake_set_present(0U, false) == eResultOk);
+    check_sensors(NULL);
+    check_frame((SDisplayFrame_t){{eGlyphE, eGlyph0, eGlyph0, eGlyph2,
+                                  FEEDBACK_LED_MASK |
+                                  DISPLAY_MODE3_LED_MASK}}, 0U);
+    assert(sensors_fake_set_present(0U, true) == eResultOk);
+    check_sensors(NULL);
+    check_frame(temperature, 0U);
+    assert(!buzzer);
+    assert(heaters_off == 3U);
+    assert(writes == previous_writes);
 }
 /*----------------------------------------------------------------------------*/
 
@@ -872,6 +950,7 @@ int main(void) {
     test_each_write_failure();
     test_single_fixture_application(1U);
     test_single_fixture_application(2U);
+    test_temperature_controls_and_service();
     test_automatic_save_completion();
     test_startup_chord();
     test_startup_input_settling();

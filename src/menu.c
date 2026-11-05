@@ -187,6 +187,7 @@ EResult_t menu_open(EError_t error, uint8_t presence) {
     presence_mask = presence;
     bspHeaterOff(eBspHeater1);
     bspHeaterOff(eBspHeater2);
+    display_set_leds(DISPLAY_MODE3_LED_MASK, 0U);
     candidate = (SBoilerConfig_t){0};
     candidate.operating_profile = eProfileSingle;
     last_result = eResultOk;

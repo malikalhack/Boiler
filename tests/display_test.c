@@ -11,6 +11,7 @@
 #include <assert.h>
 #include <setjmp.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "display.h"
 #include "sensors.h"
@@ -284,6 +285,87 @@ static void test_errors(void) {
 }
 /*----------------------------------------------------------------------------*/
 
+static void check_temperature(int16_t raw, const char *text) {
+    static const uint8_t glyphs[] = {
+        eGlyph0, eGlyph1, eGlyph2, eGlyph3, eGlyph4,
+        eGlyph5, eGlyph6, eGlyph7, eGlyph8, eGlyph9
+    };
+    SDisplayFrame_t expected = {{0U, 0U, 0U, 0U, 0xA5U}};
+    uint8_t position = DISPLAY_DIGITS - strlen(text) +
+                       (strchr(text, '.') != NULL ? 1U : 0U);
+
+    while (*text != '\0') {
+        if (*text == '.') {
+            assert(position != 0U);
+            expected.slots[position - 1U] |= eGlyphPoint;
+        }
+        else {
+            assert(position < DISPLAY_DIGITS);
+            expected.slots[position++] = *text == '-' ?
+                eGlyphDash : glyphs[(uint8_t)(*text - '0')];
+        }
+        text++;
+    }
+    assert(position == DISPLAY_DIGITS);
+    assert(display_show_temperature(raw) == eResultOk);
+    check_frame(expected);
+}
+/*----------------------------------------------------------------------------*/
+
+static void test_temperatures(void) {
+    SDisplayFrame_t original = {{1U, 2U, 3U, 4U, 0xA5U}};
+    int16_t raw;
+    int rounded;
+    char text[16];
+    double degrees;
+    uint8_t position;
+
+    display_init();
+    display_set_frame(original);
+    check_temperature(-55 * SENSOR_TEMP_SCALE, "-55");
+    check_temperature(-168, "-11");
+    check_temperature(-160, "-10");
+    check_temperature(-159, "-9.9");
+    check_temperature(-8, "-0.5");
+    check_temperature(-1, "-0.1");
+    check_temperature(0, "0.0");
+    check_temperature(1, "0.1");
+    check_temperature(25 * SENSOR_TEMP_SCALE, "25.0");
+    check_temperature(1599, "99.9");
+    check_temperature(1600, "100");
+    check_temperature(1608, "101");
+    check_temperature(125 * SENSOR_TEMP_SCALE, "125");
+    for (raw = -55 * SENSOR_TEMP_SCALE;
+         raw <= 125 * SENSOR_TEMP_SCALE; raw++) {
+        degrees = (double)raw / SENSOR_TEMP_SCALE;
+        rounded = (int)(degrees * 10.0 + (raw < 0 ? -0.5 : 0.5));
+        if ((rounded >= -99) && (rounded <= 999)) {
+            snprintf(text, sizeof(text), "%.1f", rounded / 10.0);
+        }
+        else {
+            rounded = (int)(degrees + (raw < 0 ? -0.5 : 0.5));
+            snprintf(text, sizeof(text), "%d", rounded);
+        }
+        check_temperature(raw, text);
+    }
+    display_set_frame(original);
+    assert(display_show_temperature(-55 * SENSOR_TEMP_SCALE - 1) ==
+           eResultOutOfRange);
+    assert(display_show_temperature(125 * SENSOR_TEMP_SCALE + 1) ==
+           eResultOutOfRange);
+    assert(display_show_temperature(INT16_MIN) == eResultOutOfRange);
+    assert(display_show_temperature(INT16_MAX) == eResultOutOfRange);
+    check_frame(original);
+    check_slot(0U, original.slots[0]);
+    assert(display_show_temperature(0) == eResultOk);
+    for (position = 1U; position < DISPLAY_SLOTS; position++) {
+        check_slot(position, original.slots[position]);
+    }
+    check_frame((SDisplayFrame_t){{eGlyphBlank, eGlyphBlank,
+                                 eGlyph0 | eGlyphPoint, eGlyph0, 0xA5U}});
+}
+/*----------------------------------------------------------------------------*/
+
 static void test_feedback(void) {
     SDisplayFrame_t frame = {{eGlyph1, eGlyph2, eGlyph3, eGlyph4, 0xA1U}};
     SDisplayFrame_t expected;
@@ -355,6 +437,7 @@ int main(void) {
 
     test_frames();
     test_errors();
+    test_temperatures();
     test_feedback();
     test_startup(false, error);
     test_startup(true, dashes);

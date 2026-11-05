@@ -73,7 +73,10 @@ static void test_initialization(void) {
     assert(sensors_fake_get_presence(&presence) == eResultNotReady);
     assert(presence == TEST_SENTINEL);
     assert(sensors_fake_get_presence(NULL) == eResultInvalidArgument);
+    assert(sensors_fake_sweep_start(0U) == eResultNotReady);
+    assert(sensors_fake_sweep_update(0U) == eResultNotReady);
     sensors_init();
+    assert(sensors_fake_sweep_update(0U) == eResultNotReady);
     assert(sensors_fake_get_presence(&presence) == eResultOk);
     assert(presence == (1U << SENSOR_FAKE_COUNT) - 1U);
 }
@@ -216,11 +219,73 @@ static void test_invalid_arguments(void) {
 }
 /*----------------------------------------------------------------------------*/
 
+static void check_sweep(int16_t tenths) {
+    SSensorRom_t rom;
+    int16_t raw;
+    int16_t expected;
+    uint8_t index;
+    double exact = tenths * (double)SENSOR_TEMP_SCALE / 10.0;
+
+    expected = (int16_t)(exact + (tenths < 0 ? -0.5 : 0.5));
+    for (index = 0U; index < SENSOR_FAKE_COUNT; index++) {
+        assert(sensors_fake_get_rom(index, &rom) == eResultOk);
+        assert(sensors_read(rom, &raw) == eResultOk);
+        assert(raw == expected);
+        assert((raw * 10 + (raw < 0 ? -8 : 8)) / SENSOR_TEMP_SCALE ==
+               tenths);
+    }
+}
+/*----------------------------------------------------------------------------*/
+
+static void test_sweep(void) {
+    uint16_t now = UINT16_MAX - 200U;
+    uint16_t step;
+    uint8_t presence;
+
+    sensors_init();
+    assert(sensors_fake_sweep_start(now) == eResultOk);
+    check_sweep(-550);
+    for (step = 1U; step <= 1801U; step++) {
+        now += SENSOR_FAKE_STEP_TICKS - 1U;
+        assert(sensors_fake_sweep_update(now) == eResultOk);
+        check_sweep((int16_t)step - 551);
+        now++;
+        assert(sensors_fake_sweep_update(now) == eResultOk);
+        check_sweep(step == 1801U ? -550 : (int16_t)step - 550);
+    }
+    now += 3U * SENSOR_FAKE_STEP_TICKS + 17U;
+    assert(sensors_fake_sweep_update(now) == eResultOk);
+    check_sweep(-547);
+    now += SENSOR_FAKE_STEP_TICKS - 18U;
+    assert(sensors_fake_sweep_update(now) == eResultOk);
+    check_sweep(-547);
+    now++;
+    assert(sensors_fake_sweep_update(now) == eResultOk);
+    check_sweep(-546);
+    assert(sensors_fake_set_present(1U, false) == eResultOk);
+    now += 100U * SENSOR_FAKE_STEP_TICKS;
+    assert(sensors_fake_sweep_update(now) == eResultOk);
+    assert(sensors_fake_get_presence(&presence) == eResultOk);
+    assert(presence == 1U);
+    assert(sensors_fake_set_present(1U, true) == eResultOk);
+    check_sweep(-446);
+    assert(sensors_fake_set_present(0U, false) == eResultOk);
+    assert(sensors_fake_sweep_start(now) == eResultOk);
+    assert(sensors_fake_get_presence(&presence) == eResultOk);
+    assert(presence == 2U);
+    assert(sensors_fake_set_present(0U, true) == eResultOk);
+    check_sweep(-550);
+    sensors_init();
+    assert(sensors_fake_sweep_update(now) == eResultNotReady);
+}
+/*----------------------------------------------------------------------------*/
+
 int main(void) {
     test_initialization();
     test_discovery();
     test_temperature_and_rom_addressing();
     test_invalid_arguments();
+    test_sweep();
     puts("Fake sensor tests passed");
     return 0;
 }

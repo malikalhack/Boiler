@@ -18,6 +18,8 @@
 #include "bsp.h"
 #include "tasks.h"
 #if (SENSORS_USE_FAKE == 1)
+#include <string.h>
+
 #include "sensors_fake.h"
 #if (CONFIG_USE_TEST == 0)
 #include "menu.h"
@@ -50,6 +52,7 @@
 _Noreturn static void error_handler(void);
 #if (SENSORS_USE_FAKE == 1)
 static void check_sensors(void *context);
+static void show_status(void);
 #if (CONFIG_USE_TEST == 0)
 static void on_button(EButton_t button, EButtonEvent_t event);
 static void service_update(void *context);
@@ -67,6 +70,7 @@ static EError_t active_error;
 #if (CONFIG_USE_TEST == 0)
 static bool startup_pending;
 static bool startup_holding;
+static bool service_active;
 static AcroTick_t startup_last_tick;
 static AcroTick_t startup_remaining;
 #endif /* CONFIG_USE_TEST */
@@ -90,6 +94,7 @@ int main(void) {
         0U, (SENSOR_FAKE_PRESENT_MASK & 1U) != 0U));
     CHECK_RESULT(sensors_fake_set_present(
         1U, (SENSOR_FAKE_PRESENT_MASK & 2U) != 0U));
+    CHECK_RESULT(sensors_fake_sweep_start(bsp_get_time()));
     config_loaded = error == eErrorNone;
     if (config_loaded) {
         active_config = config;
@@ -99,10 +104,12 @@ int main(void) {
 #if (CONFIG_USE_TEST == 0)
     init_menu(error);
 #endif /* CONFIG_USE_TEST */
-#endif /* SENSORS_USE_FAKE */
+    show_status();
+#else
     if (error != eErrorNone) {
         CHECK_RESULT(display_show_error(error));
     }
+#endif /* SENSORS_USE_FAKE */
 
     CHECK_STATUS(acroInit(bspGetTick()));
     CHECK_STATUS(acroAddTask(
@@ -149,10 +156,28 @@ int main(void) {
 /****************************** Private functions *****************************/
 
 #if (SENSORS_USE_FAKE == 1)
+static void show_status(void) {
+    SSensorRom_t rom;
+    int16_t temperature;
+
+    display_set_leds(DISPLAY_MODE3_LED_MASK,
+                     config_loaded ? DISPLAY_MODE3_LED_MASK : 0U);
+    if (active_error != eErrorNone) {
+        CHECK_RESULT(display_show_error(active_error));
+    }
+    else {
+        memcpy(rom.bytes, active_config.sensor_rom[0], SENSOR_ROM_SIZE);
+        CHECK_RESULT(sensors_read(rom, &temperature));
+        CHECK_RESULT(display_show_temperature(temperature));
+    }
+}
+/*----------------------------------------------------------------------------*/
+
 static void check_sensors(void *context) {
     EError_t error;
 
     (void)context;
+    CHECK_RESULT(sensors_fake_sweep_update(bsp_get_time()));
 #if (CONFIG_USE_TEST == 0)
     if (menu_is_active()) {
         return;
@@ -161,15 +186,10 @@ static void check_sensors(void *context) {
     if (config_loaded) {
         CHECK_RESULT(config_check_sensors(&active_config, &error));
         if (error != active_error) {
-            if (error == eErrorNone) {
-                display_show_dashes();
-            }
-            else {
-                CHECK_RESULT(display_show_error(error));
-            }
             feedback_set_error(error != eErrorNone);
             active_error = error;
         }
+        show_status();
     }
 }
 /*----------------------------------------------------------------------------*/
@@ -184,6 +204,8 @@ static void on_button(EButton_t button, EButtonEvent_t event) {
 /*----------------------------------------------------------------------------*/
 
 static void service_update(void *context) {
+    bool was_active = service_active || menu_is_active();
+
     check_startup_service();
     menu_update(context);
     if (menu_get_state() == eMenuApplied) {
@@ -191,14 +213,12 @@ static void service_update(void *context) {
         CHECK_RESULT(config_validate(&active_config));
         config_loaded = true;
         CHECK_RESULT(config_check_sensors(&active_config, &active_error));
-        if (active_error == eErrorNone) {
-            display_show_dashes();
-        }
-        else {
-            CHECK_RESULT(display_show_error(active_error));
-        }
         feedback_set_error(active_error != eErrorNone);
         init_menu(active_error);
+    }
+    service_active = menu_is_active();
+    if (was_active && !service_active) {
+        check_sensors(NULL);
     }
 }
 /*----------------------------------------------------------------------------*/
@@ -208,6 +228,7 @@ static void init_menu(EError_t error) {
 
     CHECK_RESULT(sensors_fake_get_presence(&presence));
     menu_init(error, presence);
+    service_active = false;
 }
 /*----------------------------------------------------------------------------*/
 

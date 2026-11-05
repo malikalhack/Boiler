@@ -122,6 +122,11 @@ HL4 is connected to segment D (PA3, bit 3) in the K5 LED slot. It remains
 on during normal operation. While an error is active, it blinks with a
 one-second period: 500 ms on and 500 ms off (50 percent duty cycle).
 
+HL7 is connected to segment C (PA2, bit 2) in the K5 LED slot. In the
+current fake-temperature stage it stays on when Mode 3 is selected by a
+valid configuration, including while a sensor error is displayed. It is
+off without a valid configuration and throughout sensor assignment.
+
 The buzzer on PC2 is active, with a built-in oscillator, and sounds when
 the pin is high. Startup produces one short 100 ms signal; it must not
 sound continuously in an error state. Timing is non-blocking.
@@ -265,6 +270,18 @@ The fake returns immediately and does not model conversion time, bus faults
 or scratchpad CRC failures. Real backends will require incremental conversion
 handling before they can replace it; fake readings never authorize heating.
 
+Fake-enabled firmware explicitly starts an automatic temperature sweep after
+backend initialization. Both fixtures start at -55.0 C, increase together by
+0.1 C every 500 ms through +125.0 C inclusive, then return to -55.0 C and
+repeat. A tenths accumulator is converted to the nearest 1/16 C reading;
+adding a rounded raw increment repeatedly is forbidden because it would drift.
+Each endpoint lasts one step interval; the complete 1801-sample cycle takes
+900.5 seconds. Disconnected fixtures advance too, and assignment/save/apply
+does not restart the sweep or change presence. Timing is non-blocking,
+handles tick wrap and retains elapsed partial intervals after a late poll.
+The low-level initialization and manual fixture controls remain available
+for deterministic tests without starting the sweep.
+
 ## 4. EEPROM Configuration
 
 Persisted operating-profile values are `1` for `SINGLE_CHANNEL` and `2` for
@@ -396,8 +413,8 @@ The first two digit decimal points indicate fixture presence, independently
 of assigned locations. Right never writes EEPROM or assigns a ROM by index.
 This is a test control, not a feature for the real sensor backend.
 
-Left cancels any step before writing and restores the previous diagnostic
-screen (or dashes) with no EEPROM change. Changing fake presence during
+Left cancels any step before writing and restores the current diagnostic
+or temperature screen with no EEPROM change. Changing fake presence during
 service can produce a new ordinary diagnostic after cancellation, without
 changing the old assignments. Failed measurements/checks display their error;
 Enter retries the
@@ -411,10 +428,12 @@ All keys are ignored once writing begins, through the application handoff.
 After final verification the saved record is applied automatically without
 an additional screen, button press, reset or startup beep. Ordinary diagnostics
 do not overwrite service screens. Enter combined with another held button
-does not confirm a step. After application, the idle screen shows dashes with
-steady HL4 or the current diagnostic if sensor presence has since changed.
+does not confirm a step. After application, the idle screen shows the assigned SENSOR_1 temperature
+with steady HL4 and HL7, or the current diagnostic if sensor presence has
+since changed.
 Applying the saved record does not reset simulated presence to its startup
-mask. Subsequent service initialization reads actual backend presence.
+mask or restart the temperature sweep. Subsequent service initialization
+reads actual backend presence.
 Diagnostics remain paused through the application handoff, so they cannot
 check an old assignment against the new service setup.
 
@@ -448,8 +467,8 @@ The fake-enabled firmware checks required devices at startup and every
 100 ms. E001 blocks sensor checks; a missing first device produces E002,
 a missing required second device produces E003. Missing assigned devices
 have priority over unassigned extras, which produce E004. If both devices
-are missing, E002 is displayed. Recovery clears the diagnostic to dashes
-and makes HL4 steady without repeating the startup beep.
+are missing, E002 is displayed. Recovery restores the assigned SENSOR_1
+temperature and makes HL4 steady without repeating the startup beep.
 
 The normal build loads and validates EEPROM assignments but does not yet
 perform real bus checks. No build at this stage enables heater outputs.
@@ -544,6 +563,31 @@ fails, the previous valid configuration remains unchanged; without a previous
 valid configuration, the device returns to `CONFIG_INVALID`.
 
 ### User Interface Displays
+
+The current interface stage implements only Mode 3 temperature indication
+with fake sensors; no build enables heating. Both profiles show only the
+ROM assigned to SENSOR_1, with no channel switching or channel marker.
+Existing profile-based diagnostics are retained: a two-channel assignment
+still requires both devices, and unknown extras remain errors.
+
+Temperature formatting is right-aligned on the four digits, with leading
+zeros blank and a minus sign for negative readings. First round the original
+reading to the nearest tenth. If that result is within -9.9..99.9 C,
+show one decimal place (including the trailing zero, e.g. 25.0). Otherwise
+round the original reading to whole degrees. Halfway values round away from
+zero. Examples: -55, -10.5 -> -11, -9.9375 -> -9.9, 0.0, 99.9375 -> 99.9,
+100, 100.5 -> 101, 125. The complete DS18B20 range is displayable for testing;
+this does not extend allowable water setpoints or authorize heating.
+
+Ordinary temperature-screen buttons have no action in this stage. Startup
+Left+Right and Enter at E001 retain their service-entry behavior, and all
+existing assignment-menu controls remain available. Diagnostics and service
+screens take precedence over temperature. Returning from service rechecks
+the current sensor setup before restoring temperature or a diagnostic.
+
+The following two-channel display/control rules are future scope. Channel
+identity will use an upper square for channel 1 and a lower square for
+channel 2, not a numeric channel label.
 
 - In Mode 1, the display shows the selected channel temperature.
 - `Left` selects channel 1 and `Right` selects channel 2 in Mode 1.

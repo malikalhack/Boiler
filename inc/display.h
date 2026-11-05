@@ -29,6 +29,12 @@
 #define DISPLAY_SLOTS (DISPLAY_DIGITS + 1U)
 
 /**
+ * @def DISPLAY_MODE3_LED_MASK
+ * @brief HL7, segment C in K5, indicates the single-channel operating mode.
+ */
+#define DISPLAY_MODE3_LED_MASK (0x04U)
+
+/**
  * @enum EDisplayGlyph
  * @brief Active-high glyphs with A..G on bits 0..6 and DP on bit 7.
  */
@@ -112,6 +118,16 @@ void display_set_leds(uint8_t mask, uint8_t value);
  * Call only from startup or cooperative tasks, not interrupt handlers.
  */
 EResult_t display_show_error(EError_t error);
+
+/**
+ * @brief Show a DS18B20 reading (-55..125 C), preserving all LEDs.
+ * @param[in] temperature Signed temperature in 1/16 degree Celsius units.
+ * @details Round to tenths within -9.9..99.9, otherwise to whole degrees.
+ * Halfway values round away from zero; leading zeros are blank.
+ * @retval eResultOk Digits queued.
+ * @retval eResultOutOfRange Invalid reading; pending frame is unchanged.
+ */
+EResult_t display_show_temperature(int16_t temperature);
 
 /**
  * @brief Output one slot and advance cyclically from K1 through K5.
