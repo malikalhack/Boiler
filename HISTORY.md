@@ -228,6 +228,30 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
 
 ## 2026-11-05
 
+### Fake sensor backend
+
+- Added a sensor discovery/read interface and an explicitly enabled fake
+  implementation (`SENSORS_USE_FAKE=1`, disabled by default).
+- Two fixed, distinct DS18B20 ROMs have valid Dallas CRC bytes. Devices
+  start present at 25 and 30 C; fixture controls independently change
+  presence and temperature (-55..125 C, signed 1/16 degree units).
+- Reads match the entire ROM, not discovery order. Missing or unknown
+  devices return the new operation result `eResultNotFound`; use before
+  initialization returns `eResultNotReady`. Existing result values and
+  E001..E009 application codes are unchanged.
+- The module performs no bus, EEPROM or heater access. Firmware startup,
+  configuration checks and displayed errors remain unchanged; E002/E003
+  integration and the assignment menu are subsequent steps.
+- The fake is immediate, without conversion timing or bus/CRC fault
+  simulation. Real asynchronous conversion handling remains future work.
+- Verification: `make test` and `make -B all` passed. Tests cover all four
+  presence combinations, ROM CRCs, complete-ROM matching, every raw
+  temperature in range, bounds, initialization/reset and unchanged outputs
+  on failure. The enabled fake also compiles with AVR-GCC using
+  `avr-gcc -std=c11 -Wall -Wextra -Werror -mmcu=atmega16a -Iinc -Os
+  -DSENSORS_USE_FAKE=1 -c src/sensors_fake.c -o output/tests/sensors_fake_avr.o`.
+  Default firmware remains at 3134 bytes Flash and 252 bytes static RAM.
+
 ### Button input
 
 - Added active-low PC3..PC7 reading with existing internal pull-ups,

@@ -19,11 +19,13 @@
 typedef enum EResult {
     eResultOk              = 0, /**< Operation completed successfully. */
     eResultInvalidArgument = 1, /**< NULL buffer, zero size, or unknown code. */
-    eResultOutOfRange      = 2, /**< EEPROM range or layout exceeds capacity. */
+    eResultOutOfRange      = 2, /**< Range, capacity or value limit exceeded. */
     eResultNoConfig        = 3, /**< No valid configuration is available. */
     eResultReadFailed      = 4, /**< EEPROM backend could not read data. */
     eResultWriteFailed     = 5, /**< EEPROM backend could not write data. */
-    eResultVerifyFailed    = 6  /**< Readback does not match the saved record. */
+    eResultVerifyFailed    = 6, /**< Readback does not match the saved record. */
+    eResultNotFound        = 7, /**< Addressed device is absent or unknown. */
+    eResultNotReady        = 8  /**< Module has not been initialized. */
 } EResult_t;
 
 /**

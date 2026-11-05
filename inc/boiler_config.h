@@ -13,6 +13,18 @@
 /********************************* Definitions ********************************/
 
 /**
+ * @def SENSORS_USE_FAKE
+ * @brief Explicit test-backend opt-in; never enabled in a normal build.
+ */
+#ifndef SENSORS_USE_FAKE
+#define SENSORS_USE_FAKE          (0U)
+#endif /* SENSORS_USE_FAKE */
+
+#if ((SENSORS_USE_FAKE != 0U) && (SENSORS_USE_FAKE != 1U))
+#error "SENSORS_USE_FAKE must be 0 or 1"
+#endif /* SENSORS_USE_FAKE */
+
+/**
  * @def BOILER_CPU_HZ
  * @brief CPU clock frequency in hertz.
  */

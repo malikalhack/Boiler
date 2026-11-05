@@ -245,6 +245,26 @@ Before heating is enabled, verify:
 
 Any failure disables both heater outputs.
 
+### 3.1. Fake Sensor Backend
+
+The explicit `SENSORS_USE_FAKE=1` build option enables an isolated test
+implementation; normal builds default to zero. It does not use GPIO, 1-Wire,
+EEPROM or heater outputs. The current firmware startup does not call it.
+
+The backend provides discovery and temperature reads addressed by complete
+ROM, with two fixed DS18B20-family ROMs containing valid Dallas CRC bytes.
+Fixture indices control simulation only and do not assign installation points.
+Initialization restores both devices as present, at 25 and 30 degrees Celsius.
+Test controls can independently disconnect either device and set signed
+temperatures in 1/16 degree units within the DS18B20 range (-55..125 C).
+
+Discovery succeeds with a count of zero on an empty simulated bus. Reads of
+absent or unknown ROMs return `eResultNotFound`, not a synthetic temperature.
+Uninitialized calls return `eResultNotReady`. Failed calls preserve outputs.
+The fake returns immediately and does not model conversion time, bus faults
+or scratchpad CRC failures. Real backends will require incremental conversion
+handling before they can replace it; fake readings never authorize heating.
+
 ## 4. EEPROM Configuration
 
 The first EEPROM addresses are reserved. Application configuration starts at
