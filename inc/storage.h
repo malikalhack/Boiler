@@ -1,7 +1,7 @@
 /**
  * @copyright @showdate "%Y " Anton Chernov. All rights reserved.
  * @file    storage.h
- * @version 0.1.0
+ * @version 0.1.1
  * @authors Anton Chernov
  * @date    2026-10-04
  * @date    @showdate "%Y-%m-%d"
