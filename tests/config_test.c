@@ -1,7 +1,7 @@
 /**
  * @copyright @showdate "%Y " Anton Chernov. All rights reserved.
  * @file    config_test.c
- * @version 0.1.5
+ * @version 0.1.6
  * @authors Anton Chernov
  * @date    2026-11-05
  * @date    @showdate "%Y-%m-%d"
