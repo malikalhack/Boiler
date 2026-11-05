@@ -20,6 +20,44 @@
 #define SENSORS_USE_FAKE          (0U)
 #endif /* SENSORS_USE_FAKE */
 
+/**
+ * @def CONFIG_USE_TEST
+ * @brief Use fixture ROMs in RAM without accessing EEPROM; requires fake sensors.
+ */
+#ifndef CONFIG_USE_TEST
+#define CONFIG_USE_TEST           (0U)
+#endif /* CONFIG_USE_TEST */
+/**
+ * @def CONFIG_TEST_PROFILE
+ * @brief Test profile: 1 single-channel, 2 two-channel.
+ */
+#ifndef CONFIG_TEST_PROFILE
+#define CONFIG_TEST_PROFILE       (2U)
+#endif /* CONFIG_TEST_PROFILE */
+/**
+ * @def SENSOR_FAKE_PRESENT_MASK
+ * @brief Startup fixture presence: bit 0 first device, bit 1 second device.
+ */
+#ifndef SENSOR_FAKE_PRESENT_MASK
+#define SENSOR_FAKE_PRESENT_MASK  (3U)
+#endif /* SENSOR_FAKE_PRESENT_MASK */
+
+#if ((CONFIG_USE_TEST != 0U) && (CONFIG_USE_TEST != 1U))
+#error "CONFIG_USE_TEST must be 0 or 1"
+#endif /* CONFIG_USE_TEST */
+
+#if ((CONFIG_USE_TEST == 1U) && (SENSORS_USE_FAKE != 1U))
+#error "RAM test configuration requires fake sensors"
+#endif /* CONFIG_USE_TEST */
+
+#if ((CONFIG_TEST_PROFILE != 1U) && (CONFIG_TEST_PROFILE != 2U))
+#error "CONFIG_TEST_PROFILE must be 1 or 2"
+#endif /* CONFIG_TEST_PROFILE */
+
+#if ((SENSOR_FAKE_PRESENT_MASK < 0) || (SENSOR_FAKE_PRESENT_MASK > 3U))
+#error "SENSOR_FAKE_PRESENT_MASK must be 0..3"
+#endif /* SENSOR_FAKE_PRESENT_MASK */
+
 #if ((SENSORS_USE_FAKE != 0U) && (SENSORS_USE_FAKE != 1U))
 #error "SENSORS_USE_FAKE must be 0 or 1"
 #endif /* SENSORS_USE_FAKE */

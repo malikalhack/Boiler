@@ -267,6 +267,14 @@ handling before they can replace it; fake readings never authorize heating.
 
 ## 4. EEPROM Configuration
 
+Persisted operating-profile values are `1` for `SINGLE_CHANNEL` and `2` for
+`TWO_CHANNEL`; zero and other values are invalid. The application validates
+required DS18B20 ROM family codes, Dallas CRCs and uniqueness after loading
+the newest intact record. The storage module validates record integrity;
+application validation does not change the EEPROM layout or format version.
+The second assignment is ignored for the single-channel profile.
+Application settings remain opaque until their control logic is implemented.
+
 The first EEPROM addresses are reserved. Application configuration starts at
 or after address `0x20`.
 
@@ -369,6 +377,26 @@ Required behavior:
 
 `E001` means: sensor configuration is missing or invalid. Dashes may be used
 as an intermediate display, but must not be the only indication of this state.
+
+### 6.1. RAM Configuration Test Mode
+
+`CONFIG_USE_TEST=1` requires `SENSORS_USE_FAKE=1`. It loads fixed fixture ROMs
+into RAM and bypasses EEPROM initialization, reads and writes entirely.
+`CONFIG_TEST_PROFILE` selects profile 1 or 2 (default 2).
+`SENSOR_FAKE_PRESENT_MASK` selects startup presence, bit 0 for the first
+fixture and bit 1 for the second (default 3). These are test controls only;
+locations are still matched using the full configured ROM.
+
+The fake-enabled firmware checks required devices at startup and every
+100 ms. E001 blocks sensor checks; a missing first device produces E002,
+a missing required second device produces E003. Missing assigned devices
+have priority over unassigned extras, which produce E004. If both devices
+are missing, E002 is displayed. Recovery clears the diagnostic to dashes
+and makes HL4 steady without repeating the startup beep.
+
+The normal build loads and validates EEPROM assignments but does not yet
+perform real bus checks. No build at this stage enables heater outputs.
+The RAM test mode is not a persistent configuration or a sensor service menu.
 
 ## 7. Error Codes
 

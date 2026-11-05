@@ -12,6 +12,7 @@
 #include <stdio.h>
 
 #include "display.h"
+#include "sensors.h"
 #include "storage.h"
 #include "bsp.h"
 
@@ -90,6 +91,21 @@ EResult_t storageInit(void) {
     assert(ports_initialized);
     assert(!interrupts_enabled);
     return storage_valid ? eResultOk : eResultNoConfig;
+}
+/*----------------------------------------------------------------------------*/
+
+EResult_t storageGet(SBoilerConfig_t *config) {
+    static const uint8_t rom[SENSOR_ROM_SIZE] = {
+        0x28U, 0x01U, 0U, 0U, 0U, 0U, 0U, 0x29U
+    };
+    uint8_t index;
+
+    *config = (SBoilerConfig_t){0};
+    config->operating_profile = eProfileSingle;
+    for (index = 0U; index < sizeof(rom); index++) {
+        config->sensor_rom[0][index] = rom[index];
+    }
+    return eResultOk;
 }
 /*----------------------------------------------------------------------------*/
 

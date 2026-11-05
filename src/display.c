@@ -31,12 +31,8 @@ static uint8_t scan_position;
 /********************** Application Programming Interface *********************/
 
 void display_init(void) {
-    uint8_t digit;
-
     bsp_display_write(0U, 0U);
-    for (digit = 0U; digit < DISPLAY_DIGITS; digit++) {
-        pending_frame.slots[digit] = eGlyphDash;
-    }
+    display_show_dashes();
     pending_frame.slots[DISPLAY_DIGITS] = 0U;
     active_frame = pending_frame;
     scan_position = 0U;
@@ -48,6 +44,15 @@ void display_set_frame(SDisplayFrame_t frame) {
     pending_frame = frame;
 }
 
+/*----------------------------------------------------------------------------*/
+
+void display_show_dashes(void) {
+    uint8_t digit;
+
+    for (digit = 0U; digit < DISPLAY_DIGITS; digit++) {
+        pending_frame.slots[digit] = eGlyphDash;
+    }
+}
 /*----------------------------------------------------------------------------*/
 
 void display_set_leds(uint8_t mask, uint8_t value) {

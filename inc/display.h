@@ -65,6 +65,11 @@ typedef struct SDisplayFrame {
 void display_init(void);
 
 /**
+ * @brief Show four dashes without changing LED states.
+ */
+void display_show_dashes(void);
+
+/**
  * @brief Queue a complete frame for the next K1 slot.
  * @details Call only from cooperative tasks, not interrupt handlers.
  * Replaces any frame not yet displayed; digit and LED data latch together.

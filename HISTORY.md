@@ -228,6 +228,39 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
 
 ## 2026-11-05
 
+### Configuration and assigned-sensor diagnostics
+
+- Added application-level profile/ROM validation above the unchanged EEPROM
+  storage format: profiles 1/2, DS18B20 family, Dallas CRC and unique required
+  assignments. Invalid assignments produce E001; application settings remain
+  opaque until control logic exists.
+- At the user's choice, added an explicit RAM-only test configuration instead
+  of writing fixture data to EEPROM. CONFIG_USE_TEST requires the fake sensor
+  backend and bypasses all EEPROM calls. Test profile and startup fixture
+  presence are selectable through Make options or MPLAB compiler macros.
+- Fake-enabled startup and a 100 ms diagnostic task check complete assigned
+  ROMs. Missing first/required second devices produce E002/E003; a second
+  device is not required for a single-channel profile. Missing assignments
+  take precedence over unknown extras (E004); both missing produces E002.
+- Recovery clears the display to dashes while preserving other LED bits,
+  returns HL4 to steady light and does not restart the beep. Unexpected
+  backend operation failures use the existing fatal-handler pattern.
+  All heaters remain off; the normal build has no real bus checks yet.
+- Added a user-facing test-build command and expected display table in README.
+  Sensor configuration menus and persistent assignment remain subsequent work.
+- Verification: `make test`, `make -B all`, and
+  `make -B all BUILD_DIR=output/test-config FAKE_SENSORS=1 TEST_CONFIG=1
+  FAKE_PRESENT=1` passed. Tests cover invalid profiles/ROMs, duplicate
+  assignments, swapped ROM locations, both profiles with all four presence
+  masks, E002/E003/E004, recovery, LED phases, no repeated beep, untouched
+  outputs on operation failure and zero EEPROM calls in RAM mode.
+  Normal firmware: 3538 bytes Flash / 252 bytes static RAM; RAM test
+  firmware: 4194 bytes Flash / 273 bytes static RAM.
+- Hardware verification: the user confirmed Make test builds with
+  FAKE_PRESENT=1 show E003, FAKE_PRESENT=2 show E002, and FAKE_PRESENT=3
+  show four dashes with HL4 continuously on. MPLAB test-mode verification
+  remains pending.
+
 ### Fake sensor backend
 
 - Added a sensor discovery/read interface and an explicitly enabled fake

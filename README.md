@@ -26,6 +26,34 @@ GitHub Actions runs both checks for pull requests and pushes to `development`,
 `main`, or `master`, and stores the firmware images, map and `VERSION` as an
 artifact. Hardware behavior still requires testing on the board.
 
+#### Sensor test build
+
+For a bench test with fake sensors and RAM-only configuration:
+
+```sh
+make -B all BUILD_DIR=output/test-config FAKE_SENSORS=1 TEST_CONFIG=1 FAKE_PRESENT=1
+```
+
+Flash `output/test-config/boiler.hex`. EEPROM is not accessed by this test
+mode; heater outputs remain off. With the default two-channel profile:
+
+| `FAKE_PRESENT` | Simulated devices | Display |
+| --- | --- | --- |
+| 0 | Neither | E002 |
+| 1 | First only | E003 |
+| 2 | Second only | E002 |
+| 3 | Both | Dashes, HL4 continuously on |
+
+Add `TEST_PROFILE=1` for a single-channel profile. It requires only the first
+assigned ROM: `FAKE_PRESENT=1` succeeds; an extra second device gives E004.
+The build without test options continues to use EEPROM, with E001 for
+missing or invalid assignments.
+
+For MPLAB, regenerate CMake after adding sources and set equivalent compiler
+macros: `SENSORS_USE_FAKE=1`, `CONFIG_USE_TEST=1`,
+`CONFIG_TEST_PROFILE=2`, `SENSOR_FAKE_PRESENT_MASK=1`.
+Remove the test macros to return to the normal build.
+
 #### Version and pull requests
 
 `VERSION` contains the project version (`MAJOR.MINOR.PATCH`), initially `0.1.0`.
