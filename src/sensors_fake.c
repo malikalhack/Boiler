@@ -1,6 +1,6 @@
 /**
  * @file    sensors_fake.c
- * @version 0.1.2
+ * @version 0.1.3
  * @authors Anton Chernov
  * @date    2026-11-05
  * @date    @showdate "%Y-%m-%d"

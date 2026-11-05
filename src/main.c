@@ -1,7 +1,7 @@
 /**
  * @copyright @showdate "%Y " Anton Chernov. All rights reserved.
  * @file    main.c
- * @version 0.1.2
+ * @version 0.1.3
  * @authors Anton Chernov
  * @date    2026-09-12
  * @date    @showdate "%Y-%m-%d"
