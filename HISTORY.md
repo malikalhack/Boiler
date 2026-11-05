@@ -225,3 +225,87 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
   uses 2700 bytes of program memory and 216 bytes of static RAM.
 - Hardware verification: the user confirmed a short startup beep and
   blinking HL4 after flashing.
+
+## 2026-11-05
+
+### GitHub Actions and pull requests
+
+- Adapted the copied development version workflow to this project: `VERSION`
+  starts at `0.1.0` and receives one patch increment per merged PR. Removed
+  AcroSched-specific macros and paths. The initial VERSION-only implementation
+  was superseded by the transactional release-script integration below.
+- Retained duplicate-run detection, push-conflict retries and `[skip ci]`
+  handling. Repository
+  branch rules must permit the workflow token (or `VERSION_BUMP_TOKEN`) to push.
+- Added CI for host tests and a complete ATmega16A AVR build, with firmware,
+  map and version artifacts. The distributed AcroSched binary is linked as-is;
+  its source is not required by CI.
+- Retained the API-only PR commit-summary workflow and its marked section;
+  PR code is not checked out by this write-enabled workflow.
+- Cleaned the English PR template: removed scheduler/port/preemptive-suite
+  specifics and the fixed host OS, and added project build/test commands,
+  EEPROM compatibility, memory usage and explicit hardware-test results.
+- Verification: `make test` and `make -B all` passed with AVR-GCC 5.4.0
+  (2700 bytes Flash, 216 bytes static RAM). Workflow YAML and embedded Python
+  syntax checks passed. Isolated Git tests verified patch increments,
+  VERSION-only commits, duplicate-run detection, skip markers, rejection of
+  malformed versions and retry after a real concurrent push. Mocked GitHub
+  API tests verified summary preservation, escaping, idempotency and marker
+  validation. Hosted Actions execution remains to be checked after pushing.
+
+### Transactional release script
+
+- Adapted the supplied `make_release.py`: synchronize `VERSION` and Doxygen
+  `@version` headers in tracked project-owned files under `inc`, `src`, `bsp`
+  and `tests`. Select ownership by `@authors Anton Chernov` so test files and
+  host stubs without copyright lines are included.
+- Excluded the distributed AcroSched library, archived code, documentation
+  dates and EEPROM format versions. Retained exclusive backups, byte-for-byte
+  write verification, explicit failures and rollback on build/test errors.
+- Replaced the external scheduler build targets with root `make -B all test`.
+  The merge workflow calls the same script with `--skip-build` and stages
+  `VERSION` plus the updated project headers. No release was performed merely
+  to adapt the script; existing versions remain until the next release.
+- Added 12 release-script tests to `make test`: source selection, preserved
+  content/line endings, malformed headers/versions, symlinks, backup collisions,
+  readback failures, rollback and CLI/build behavior. All passed, alongside
+  the existing C tests and `make -B all`.
+- Verified a real manual release with full firmware/test verification in an
+  isolated clone, then ran the embedded workflow against a local bare remote:
+  it committed all 16 project headers and `VERSION`, left `lib` untouched and
+  skipped a repeated event without another commit. Workflow syntax checks passed.
+- Captured expected rollback-test diagnostics so deliberate build/readback
+  failures no longer look like failed `make test` runs. The build-failure test
+  runs the real release CLI and checks its nonzero exit, error reporting and
+  complete file restoration; production error output remains unchanged.
+
+### Version updates on push
+
+- Replaced the PR-closed trigger with push to `development`, covering direct
+  pushes and PR merges without duplicate increments. Each push increments
+  patch once, independent of the number of commits.
+- Retained `[skip ci]` checks for pushed commit messages and merged PR
+  titles/bodies. Query associated PRs through the GitHub API with explicit
+  pull-request read permission; API errors abort the update.
+- Key duplicate-run detection by pushed SHA instead of PR number. Checkout
+  the event SHA, retry against current development after push conflicts, and
+  require the event commit to remain in development history before bumping.
+  Automatic version commits retain `[skip ci]` to prevent recursion.
+- CI and version updates run independently; direct pushes are not implicitly
+  gated on build/test success.
+- Added push-workflow integration tests using temporary Git repositories and a
+  local GitHub CLI stub: direct/merge/multi-commit pushes, PR and commit skip
+  markers, unrelated PRs, API errors, duplicate events, recursion prevention,
+  branch creation and rejected-push retries. `make test` passed with both C
+  suites and all 22 Python tests; YAML, embedded Python and trigger/permission
+  checks passed. Hosted push execution remains to be verified after publishing.
+- Fixed a hosted failure after rewriting the branch tip: the previous SHA was
+  absent from the runner clone, making `git rev-list before..after` invalid
+  despite a full fetch. Select pushed commits and messages from the event
+  payload instead, retaining skip checks without requiring the old object.
+  Use the event head for empty commit lists, reject missing head data explicitly,
+  and skip branch-deletion events.
+- Regression verification passed: both C suites and all 26 Python tests,
+  including a real force push followed by a fresh clone where the previous
+  SHA is demonstrably absent. Skip handling, empty/malformed event data and
+  workflow YAML/Python syntax checks also passed.

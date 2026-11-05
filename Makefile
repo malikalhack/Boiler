@@ -10,6 +10,7 @@ CC          := avr-gcc
 OBJCOPY     := avr-objcopy
 SIZE        := avr-size
 HOST_CC     ?= cc
+PYTHON      ?= python3
 
 CFLAGS      := -std=c11 -Wall -Wextra -Werror -mmcu=$(MCU) \
 			   -I$(INC_DIR) -Ilib -I$(BSP_DIR) \
@@ -65,3 +66,4 @@ test:
 		-I$(BSP_DIR) tests/storage_test.c $(SRC_DIR)/storage.c \
 		-o $(BUILD_DIR)/tests/storage_test
 	$(BUILD_DIR)/tests/storage_test
+	$(PYTHON) -m unittest discover -s tests -p '*_test.py'

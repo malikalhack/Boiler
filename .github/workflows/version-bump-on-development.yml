@@ -1,0 +1,124 @@
+name: Version bump after push to development
+
+on:
+  push:
+    branches: [development]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  version-bump:
+    if: github.event.deleted == false
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout pushed commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+          token: ${{ secrets.VERSION_BUMP_TOKEN || github.token }}
+
+      - name: Update version and push to development
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+          import sys
+
+          def git(*args: str) -> str:
+              return subprocess.check_output(["git", *args], text=True).strip()
+
+          event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
+          pushed_sha = event["after"]
+          commits = {
+              commit["id"]: commit["message"] for commit in event["commits"]
+          }
+          if pushed_sha not in commits:
+              head = event["head_commit"]
+              if head is None or head["id"] != pushed_sha:
+                  raise SystemExit("Push event is missing its head commit.")
+              commits[pushed_sha] = head["message"]
+          messages = "\n".join(commits.values())
+          if "[skip ci]" in messages.lower():
+              print("[skip ci] found; version update skipped.")
+              sys.exit(0)
+
+          seen_prs = set()
+          for sha in commits:
+              pages = json.loads(subprocess.check_output(
+                  ["gh", "api", "--paginate", "--slurp",
+                   f"repos/{os.environ['REPO']}/commits/{sha}/pulls"],
+                  text=True,
+              ))
+              for page in pages:
+                  for pull_request in page:
+                      if (
+                          pull_request["number"] in seen_prs
+                          or not pull_request["merged_at"]
+                          or pull_request["base"]["ref"] != "development"
+                          or pull_request["base"]["repo"]["full_name"] != os.environ["REPO"]
+                          or pull_request["merge_commit_sha"] not in commits
+                      ):
+                          continue
+                      seen_prs.add(pull_request["number"])
+                      messages = "\n".join([
+                          pull_request.get("title") or "",
+                          pull_request.get("body") or "",
+                      ])
+                      if "[skip ci]" in messages.lower():
+                          print(f"[skip ci] found in PR #{pull_request['number']}; version update skipped.")
+                          sys.exit(0)
+
+          git("config", "user.name", "github-actions[bot]")
+          git(
+              "config", "user.email",
+              "41898282+github-actions[bot]@users.noreply.github.com",
+          )
+          marker = f"Version-Bump-For-Push: {pushed_sha}"
+          for attempt in range(1, 6):
+              git("fetch", "--no-tags", "origin", "development")
+              git("switch", "--detach", "origin/development")
+              processed = git(
+                  "log", "-1", "--format=%H", "--extended-regexp",
+                  f"--grep=^{marker}$",
+                  "origin/development",
+              )
+              if processed:
+                  print(f"Push {pushed_sha} already processed; nothing to do.")
+                  sys.exit(0)
+
+              git("merge-base", "--is-ancestor", pushed_sha, "origin/development")
+              version_file = Path("VERSION")
+              text = version_file.read_text(encoding="utf-8").strip()
+              if re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", text) is None:
+                  raise SystemExit("VERSION must contain MAJOR.MINOR.PATCH without leading zeros.")
+              parts = [int(part) for part in text.split(".")]
+              parts[2] += 1
+              version = ".".join(str(part) for part in parts)
+              subprocess.run(
+                  [sys.executable, "make_release.py", version, "--skip-build"],
+                  check=True,
+              )
+              git("add", "--update", "--", "VERSION", "inc", "src", "bsp", "tests")
+              git(
+                  "commit", "-m",
+                  f"Updated project version to {version} [skip ci]",
+                  "-m", marker,
+              )
+              result = subprocess.run(["git", "push", "origin", "HEAD:development"])
+              if result.returncode == 0:
+                  print(f"Updated development to version {version} for push {pushed_sha}.")
+                  break
+              print(f"Push attempt {attempt} failed; retrying from development.")
+          else:
+              raise SystemExit("Could not push the version update after 5 attempts.")

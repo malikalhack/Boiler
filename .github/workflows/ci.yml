@@ -1,0 +1,46 @@
+name: Build and test
+
+on:
+  push:
+    branches: [development, main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install AVR toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y gcc-avr avr-libc binutils-avr
+
+      - name: Run host tests
+        run: make test
+
+      - name: Build AVR firmware
+        run: make -B all
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ github.sha }}
+          path: |
+            output/boiler.elf
+            output/boiler.hex
+            output/boiler.map
+            VERSION
+          if-no-files-found: error

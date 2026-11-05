@@ -1,0 +1,75 @@
+name: PR commit summary
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr-commit-summary-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  update-pr-body:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Update commit summary preserving PR description
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          import html
+          import json
+          import os
+          import subprocess
+          import sys
+
+          number = int(os.environ["PR_NUMBER"])
+          endpoint = f"repos/{os.environ['REPO']}/pulls/{number}"
+          pages = json.loads(subprocess.check_output(
+              ["gh", "api", "--paginate", "--slurp", f"{endpoint}/commits"],
+              text=True,
+          ))
+          lines = []
+          for page in pages:
+              for commit in page:
+                  message = commit["commit"]["message"].splitlines()
+                  subject = message[0] if message else commit["sha"]
+                  short_sha = commit["sha"][:7]
+                  lines.append(f"- `{short_sha}` {html.escape(subject, quote=False)}")
+          summary = "\n".join(lines) or "- No commits found for this pull request."
+
+          pull_request = json.loads(subprocess.check_output(
+              ["gh", "api", endpoint], text=True,
+          ))
+          body = pull_request.get("body") or ""
+          start_marker = "<!-- AUTO-COMMIT-SUMMARY:START -->"
+          end_marker = "<!-- AUTO-COMMIT-SUMMARY:END -->"
+          replacement = f"{start_marker}\n{summary}\n{end_marker}"
+          if start_marker not in body and end_marker not in body:
+              separator = "\n\n" if body else ""
+              updated = body + separator + f"## Commits\n{replacement}\n"
+          else:
+              if body.count(start_marker) != 1 or body.count(end_marker) != 1:
+                  raise SystemExit("Expected exactly one pair of summary markers.")
+              start = body.index(start_marker)
+              end = body.index(end_marker)
+              if end < start:
+                  raise SystemExit("Summary markers are in the wrong order.")
+              updated = body[:start] + replacement + body[end + len(end_marker):]
+
+          if updated == body:
+              print("Commit summary is already up to date.")
+              sys.exit(0)
+          subprocess.run(
+              ["gh", "api", endpoint, "--method", "PATCH", "--input", "-"],
+              input=json.dumps({"body": updated}), text=True, check=True,
+          )
+          print("PR commit summary updated; description and checklist preserved.")
