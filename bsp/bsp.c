@@ -1,7 +1,7 @@
 /**
  * @copyright @showdate "%Y " Anton Chernov. All rights reserved.
  * @file    bsp.c
- * @version 0.1.7
+ * @version 0.1.8
  * @authors Anton Chernov
  * @date    2026-10-01
  * @date    @showdate "%Y-%m-%d"
