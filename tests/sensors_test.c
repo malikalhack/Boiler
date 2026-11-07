@@ -1,7 +1,7 @@
 /**
  * @copyright @showdate "%Y " Anton Chernov. All rights reserved.
  * @file    sensors_test.c
- * @version 0.1.6
+ * @version 0.1.7
  * @authors Anton Chernov
  * @date    2026-11-05
  * @date    @showdate "%Y-%m-%d"
