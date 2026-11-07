@@ -1,7 +1,7 @@
 /**
  * @copyright @showdate "%Y " Anton Chernov. All rights reserved.
  * @file    crc8.h
- * @version 0.1.8
+ * @version 0.1.9
  * @authors Anton Chernov
  * @date    2026-11-07
  * @date    @showdate "%Y-%m-%d"
