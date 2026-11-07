@@ -375,7 +375,7 @@ verification does it receive its commit marker. At startup, the valid slot with
 the newest sequence number is selected.
 
 Partial updates of individual ROM codes are forbidden. New values remain in RAM
-until both sensors have been verified and the user has confirmed the write.
+until both sensors have been verified and the write has been explicitly confirmed.
 
 The following states are invalid:
 
@@ -413,7 +413,7 @@ complete replacement has been confirmed, committed and verified.
 
 ### 5.2. Assignment Sequence
 
-The user selects the operating profile before assigning sensors.
+Select the operating profile before assigning sensors.
 
 For `SINGLE_CHANNEL`:
 
@@ -576,7 +576,7 @@ Mode 2 is available only with the `TWO_CHANNEL` profile.
 - If the difference exceeds the configured limit, both heaters are disabled
   and the system enters a latched temperature-mismatch error state.
 - The error remains active until the difference returns within the limit and
-  the user acknowledges the error, or until the device is restarted, according
+  the error is explicitly acknowledged, or until the device is restarted, according
   to the final safety policy.
 - The configured difference limit is stored in the validated EEPROM
   application settings.

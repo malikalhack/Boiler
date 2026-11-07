@@ -169,7 +169,7 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
 - Fixed binary-directory resolution in Toolchain Support for MPLAB 1.11.2.
   It resolved a relative path against the wrong directory, losing compiler,
   objcopy, and objdump paths for the nested AVR installation.
-  With user approval, changed the installed bundle's calculation from
+  Changed the installed bundle's calculation from
   `c.relative(it.compilerBaseFolder,it.compilerBinFolder)` to
   `c.relative(Me,it.compilerBinFolder)`, where `Me` is the scan root.
   The bundle is `microchip.toolchains-1.11.2/dist/extension.js`; its original
@@ -223,7 +223,7 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
 - Display/feedback and storage host tests pass, including beep duration,
   blink phases, state transitions and tick wrap. The complete Make AVR build
   uses 2700 bytes of program memory and 216 bytes of static RAM.
-- Hardware verification: the user confirmed a short startup beep and
+- Hardware verification: confirmed a short startup beep and
   blinking HL4 after flashing.
 
 ## 2026-11-05
@@ -280,7 +280,7 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
   TEST_PROFILE=1 FAKE_PRESENT=1` (4922 bytes Flash / 278 bytes static RAM);
   `make -B all BUILD_DIR=output/menu-test FAKE_SENSORS=1 TEST_CONFIG=0`
   (8582 bytes Flash / 426 bytes static RAM).
-- Hardware verification: the user confirmed the correct mode LED (HL7),
+- Hardware verification:  confirmed the correct mode LED (HL7),
   correct temperature display across -55..125 C and blank leading zeros.
 
 ### Startup service re-entry
@@ -309,7 +309,7 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
 - A temporary standalone diagnostic, kept outside project sources, confirmed
   hardware button masks: idle 00, Left 08, Right 02, both 10. Reset through
   the programmer with both held showed startup/current masks 10/10.
-  The user found an Enter button fault and will repair it. Menu re-entry and
+  Found an Enter button fault requiring repair. Menu re-entry and
   the immediate E004 report still require retesting with the main image.
 - Main-firmware diagnostics captured an initial raw mask of 15, followed by
   the correct debounced Left+Right mask of 10. The exact-match startup gate
@@ -321,7 +321,7 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
   Verification: `make test` passed all C suites and 26 Python tests; normal,
   RAM-test and menu AVR builds passed. Menu firmware uses 7800 bytes Flash /
   426 bytes static RAM with AVR-GCC 5.4.0.
-  Hardware verification: the user confirmed that startup Left+Right now
+  Hardware verification:  confirmed that startup Left+Right now
   opens profile selection. A subsequent board test confirmed successful
   configuration/application with four dashes displayed. The earlier immediate
   E004 did not recur in this test; its original cause has not been established.
@@ -337,7 +337,7 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
   Verification: `make test` passed all C suites and 26 Python tests.
   `make -B all BUILD_DIR=output/menu-test FAKE_SENSORS=1 TEST_CONFIG=0
   FAKE_PRESENT=1` passed (7776 bytes Flash / 420 bytes static RAM).
-- Hardware verification: the user clarified the actual build command:
+- Hardware verification:  clarified the actual build command:
   `make -B all BUILD_DIR=output/menu-test FAKE_SENSORS=1 TEST_CONFIG=0`.
   Without an override, FAKE_PRESENT defaults to 3 (both devices).
   P2 assignment produced four dashes both after application and power cycling.
@@ -390,10 +390,10 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
   storage format: profiles 1/2, DS18B20 family, Dallas CRC and unique required
   assignments. Invalid assignments produce E001; application settings remain
   opaque until control logic exists.
-- At the user's choice, added an explicit RAM-only test configuration instead
-  of writing fixture data to EEPROM. CONFIG_USE_TEST requires the fake sensor
-  backend and bypasses all EEPROM calls. Test profile and startup fixture
-  presence are selectable through Make options or MPLAB compiler macros.
+- Added an explicit RAM-only test configuration instead of writing fixture data
+  to EEPROM. CONFIG_USE_TEST requires the fake sensor backend and bypasses all
+  EEPROM calls. Test profile and startup fixture presence are selectable through
+  Make options or MPLAB compiler macros.
 - Fake-enabled startup and a 100 ms diagnostic task check complete assigned
   ROMs. Missing first/required second devices produce E002/E003; a second
   device is not required for a single-channel profile. Missing assignments
@@ -412,7 +412,7 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
   outputs on operation failure and zero EEPROM calls in RAM mode.
   Normal firmware: 3538 bytes Flash / 252 bytes static RAM; RAM test
   firmware: 4194 bytes Flash / 273 bytes static RAM.
-- Hardware verification: the user confirmed Make test builds with
+- Hardware verification:  confirmed Make test builds with
   FAKE_PRESENT=1 show E003, FAKE_PRESENT=2 show E002, and FAKE_PRESENT=3
   show four dashes with HL4 continuously on. MPLAB test-mode verification
   remains pending.
@@ -445,8 +445,8 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
 
 - Added active-low PC3..PC7 reading with existing internal pull-ups,
   independent 20 ms press/release debounce, and a 1 ms polling task.
-- Added synchronous press/release events and Up/Down repeats. The user
-  replaced the original four slow changes with one initial press, a 3 s
+- Added synchronous press/release events and Up/Down repeats. Replaced
+  the original four slow changes with one initial press, a 3 s
   pause, then repeats every 500 ms starting exactly at the 3 s boundary.
 - Raw release suspends repeats before release debounce completes. Timing
   uses elapsed atomic tick snapshots and handles tick wrap; delayed polls
@@ -549,7 +549,7 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
 
 ### Real DS18B20 through software 1-Wire
 
-- The user connected a three-wire DS18B20: separate VDD, common ground and
+- Connected a three-wire DS18B20: separate VDD, common ground and
   DQ on PD2 with an external pull-up. Implemented the direct backend as the
   normal build; fake backends remain explicitly selectable. Heating remains
   disabled, and the sensor code neither changes heater GPIO nor calls an
@@ -624,7 +624,7 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
 ### Bench feedback: 12-bit resolution and documentation
 
 - The real-sensor firmware ran overnight on the board. Temperature remained
-  visible and rose when the sensor was warmed by hand. The user noticed
+  visible and rose when the sensor was warmed by hand. Observed
   subtle display jitter and only 0/3/5/8 in the tenths position. Those digits
   are consistent with 10-bit, 0.25 C readings; the previous driver preserved
   the sensor's existing resolution, which was not independently measured.
@@ -732,9 +732,9 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
 
 - Removed the firmware's temporary sensor backend and its public controls:
   `src/sensors_fake.c`, `inc/sensors_fake.h`, fixed readings, automatic sweep
-  and simulated disconnection support. With the user's confirmation, also
-  removed the dependent RAM configuration mode and fixed assignment ROMs.
-  Firmware now always loads EEPROM assignments and uses real software 1-Wire.
+  and simulated disconnection support. Removed the dependent RAM configuration
+  mode and fixed assignment ROMs. Firmware now always loads EEPROM assignments
+  and uses real software 1-Wire.
 - Removed the obsolete build variables and compiler definitions:
   `FAKE_SENSORS`, `FAKE_PRESENT`, `TEST_CONFIG`, `TEST_PROFILE`,
   `SENSORS_USE_FAKE`, `SENSOR_FAKE_PRESENT_MASK`, `CONFIG_USE_TEST` and
@@ -828,3 +828,10 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
   The physical 1-Wire object is byte-identical and no heater-on code is
   linked. EEPROM, bus timing and scheduler priorities are unchanged.
   No branch change or commit was made.
+
+### Documentation voice
+
+- Standardized history and documentation wording to the project author's
+  voice, without third-person attribution of decisions or confirmations.
+  Rephrased existing history entries and specification instructions while
+  preserving their technical meaning.
