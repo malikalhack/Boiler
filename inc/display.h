@@ -29,10 +29,31 @@
 #define DISPLAY_SLOTS (DISPLAY_DIGITS + 1U)
 
 /**
- * @def DISPLAY_MODE3_LED_MASK
- * @brief HL7, segment C in K5, indicates the single-channel operating mode.
+ * @def DISPLAY_CHANNEL_LED_MASK
+ * @brief LED bits reserved for the displayed temperature channel.
  */
-#define DISPLAY_MODE3_LED_MASK (0x04U)
+#define DISPLAY_CHANNEL_LED_MASK (eLedChannel1 | eLedChannel2)
+
+/**
+ * @def DISPLAY_MODE_LED_MASK
+ * @brief LED bits reserved for operating-mode and error indication.
+ */
+#define DISPLAY_MODE_LED_MASK (eLedMode1 | eLedMode2 | eLedMode3 | eLedMode4)
+
+/**
+ * @enum EDisplayLed
+ * @brief Active-high LED masks on the K5 segment bus.
+ */
+typedef enum EDisplayLed {
+    eLedHeating    = 0x01, /**< HL1, segment A: heating. */
+    eLedAtSetpoint = 0x20, /**< HL2, segment F: target temperature reached. */
+    eLedChannel1   = 0x10, /**< HL3, segment E: displayed channel 1. */
+    eLedChannel2   = 0x08, /**< HL4, segment D: displayed channel 2. */
+    eLedMode1      = 0x02, /**< HL5, segment B: mode 1. */
+    eLedMode2      = 0x40, /**< HL6, segment G: mode 2. */
+    eLedMode3      = 0x04, /**< HL7, segment C: mode 3. */
+    eLedMode4      = 0x80  /**< HL8, segment DP: mode 4. */
+} EDisplayLed_t;
 
 /**
  * @enum EDisplayGlyph
@@ -124,7 +145,7 @@ EResult_t display_show_error(EError_t error);
  * @param[in] temperature Signed temperature in 1/16 degree Celsius units.
  * @retval eResultOk Digits queued.
  * @retval eResultOutOfRange Invalid reading; pending frame is unchanged.
- * @note Round to tenths within -9.9..99.9, otherwise to whole degrees.
+ * @note Always show tenths, including a trailing zero, across the full range.
  * Halfway values round away from zero; leading zeros are blank.
  */
 EResult_t display_show_temperature(int16_t temperature);

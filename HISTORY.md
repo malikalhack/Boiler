@@ -773,3 +773,58 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
   EEPROM format and assignments are preserved. No branch change or commit
   was made during this cleanup.
 
+### Agreed non-blocking software 1-Wire direction
+
+- Agreed to use a hardware timer for long wire waits while returning control
+  to the cooperative scheduler. Timer events must perform required bus
+  transitions at their deadlines, not merely set a flag for a later
+  millisecond task to change the line.
+- The first stage may retain short critical software delays while making
+  the 480 us Reset pulse and 410 us recovery non-blocking. Other intervals
+  must be selected by their permitted timing error, not duration alone.
+  Synchronous byte transfers remain another source of display latency.
+- Display scanning stays in the display module as a scheduler task; timer
+  interrupt work belongs to 1-Wire timing, not display scanning.
+  A hardware 1-Wire master would handle physical protocol timing, but its
+  host communication must also avoid blocking waits.
+  No timer redesign was implemented in this indication change.
+
+### Channel LEDs, mode-error indication and fixed temperature tenths
+
+- Replaced planned on-display channel squares with HL3 for channel 1 and
+  HL4 for channel 2. Channel LEDs are off on diagnostics, dashes and all
+  service screens; Mode 3 still shows only the assigned SENSOR_1.
+  Channel switching and heating remain outside this stage.
+- Added the complete K5 LED mapping: HL1=A, HL2=F, HL3=E, HL4=D,
+  HL5=B, HL6=G, HL7=C and HL8=DP. HL1/HL2 remain off.
+- Moved error indication from HL4 to the current mode LED only, not all
+  four mode LEDs. HL7 is steady in normal Mode 3 and blinks on errors,
+  including E001 before configuration. Assignment uses HL8 for Mode 4:
+  steady on normal prompts and blinking only for its displayed errors.
+  The period remains one second with 500 ms ON and 500 ms OFF.
+- Feedback owns all mode LED bits and preserves channel/heating bits.
+  Added validated mode selection without another beep. Repeated temperature
+  or error rendering does not restart blinking; mode/error transitions
+  restart the ON phase. Startup initializes feedback before status rendering.
+  Service exit restores normal indication even while acquisition is Busy
+  or configuration is absent.
+- Always display one decimal place throughout -55..125 C, including
+  -55.0, -10.5, 100.0 and 125.0. Kept right alignment, blank leading zeros,
+  the minus sign, rounding halfway values away from zero, invalid-input
+  frame preservation and frame-boundary latching.
+- Updated specification, README and API documentation. Extended tests
+  over all 2881 valid raw temperatures, exact segment-to-LED mapping,
+  all four modes, blink boundaries and wraparound, unchanged-state phase
+  preservation, invalid modes, service errors/retries/cancellation,
+  temperature extremes with channel LEDs and real-bus startup/handoff.
+  Corrected one invalid-configuration fixture to keep its active diagnostic
+  consistent with its configuration-loaded flag.
+- Verification: `make test` passed six C suites and 26 Python tests.
+  The final display, menu/EEPROM and real-firmware suites passed ASan/UBSan
+  using non-PIE host binaries. An initial PIE sanitizer launch exited with
+  SIGSEGV without a report; the debugger run and final non-PIE runs passed.
+  Doxygen syntax/parameter, whitespace and 85-column source checks passed.
+  `make -B all` passed (9864 bytes Flash / 477 bytes static RAM).
+  The physical 1-Wire object is byte-identical and no heater-on code is
+  linked. EEPROM, bus timing and scheduler priorities are unchanged.
+  No branch change or commit was made.

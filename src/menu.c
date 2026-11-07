@@ -15,6 +15,7 @@
 #include "acrosched_defs.h"
 #include "bsp.h"
 #include "display.h"
+#include "feedback.h"
 #include "menu.h"
 #include "sensors.h"
 /****************************** Module variables ******************************/
@@ -36,6 +37,9 @@ static void render(void) {
     SDisplayFrame_t frame = {{eGlyphBlank, eGlyphBlank,
                              eGlyphBlank, eGlyphBlank, 0U}};
 
+    IGNORE_RETURN(feedback_set_mode(eLedMode4));
+    feedback_set_error(state == eMenuFailure);
+    display_set_leds(DISPLAY_CHANNEL_LED_MASK, 0U);
     switch (state) {
         case eMenuProfile:
             frame.slots[0] = eGlyphP;
@@ -182,7 +186,6 @@ EResult_t menu_open(EError_t error) {
     idle_error = error;
     bspHeaterOff(eBspHeater1);
     bspHeaterOff(eBspHeater2);
-    display_set_leds(DISPLAY_MODE3_LED_MASK, 0U);
     candidate = (SBoilerConfig_t){0};
     candidate.operating_profile = eProfileSingle;
     last_result = eResultOk;

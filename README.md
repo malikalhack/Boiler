@@ -59,12 +59,14 @@ Normal temperature-screen buttons remain inactive.
 
 The backend ensures 12-bit resolution (0.0625 C) before conversion, with
 configuration readback and preserved alarm thresholds. It changes sensor
-RAM only, not sensor EEPROM. The display still rounds to tenths or whole
-degrees; higher sensor resolution does not add displayed decimal places.
+RAM only, not sensor EEPROM. The display rounds to one decimal place across
+the full -55..125 C sensor range, including -55.0 and 125.0.
 
 The initial display can show dashes until the first checked conversion.
-Temperature uses the previously verified adaptive format; HL7 indicates
-Mode 3 and HL4 is steady without an error. Verify temperature changes by
+Temperature is right-aligned, with leading zeros blank. HL3 identifies
+channel 1 and HL7 indicates Mode 3. During an error, the channel LEDs are
+off, the error code is displayed, and only the current mode LED blinks
+(500 ms on, 500 ms off). Verify temperature changes by
 gently warming the sensor, then verify power-cycle restoration. With valid
 assignments, disconnecting the sensor eventually shows E002; reconnecting
 restores temperature without a reset or another beep. E005 means failed
@@ -105,10 +107,28 @@ cancels it. Cancelling service preserves the old EEPROM configuration.
 Configuration saved by the menu is loaded from EEPROM on subsequent starts.
 After a successful save, or after cancelling with a valid old configuration,
 the firmware rechecks sensor presence and shows SENSOR_1 temperature or the
-current diagnostic. HL7 is off inside service and on again with a valid
-configuration outside service, including during sensor errors.
+current diagnostic. HL8 indicates Mode 4 inside service, blinking only when
+a service error is displayed; HL3/HL4 remain off there. Outside service,
+HL7 indicates Mode 3, steady for normal operation or blinking for errors,
+including E001 before configuration. Showing temperature lights HL3 again.
 Two-channel assignments still check both devices but show only SENSOR_1 at
 this stage; channel switching and heating are not implemented.
+
+The K5 LED bank uses the following segment assignments:
+
+| LED | Meaning | Segment |
+| --- | --- | --- |
+| HL1 | Heating | A |
+| HL2 | At setpoint | F |
+| HL3 | Displayed channel 1 | E |
+| HL4 | Displayed channel 2 | D |
+| HL5 | Mode 1 | B |
+| HL6 | Mode 2 | G |
+| HL7 | Mode 3 | C |
+| HL8 | Mode 4 | DP |
+
+HL1 and HL2 remain off in this non-heating interface stage. Channel identity
+uses LEDs, not a digit or square glyph on the temperature display.
 
 #### Version and pull requests
 

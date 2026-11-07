@@ -118,14 +118,30 @@ K1 -> K2 -> K3 -> K4 -> K5
 The target slot-switching period is approximately 1 ms. The final value is
 tuned during brightness and flicker testing.
 
-HL4 is connected to segment D (PA3, bit 3) in the K5 LED slot. It remains
-on during normal operation. While an error is active, it blinks with a
-one-second period: 500 ms on and 500 ms off (50 percent duty cycle).
+The K5 LED bank has the following fixed assignments:
 
-HL7 is connected to segment C (PA2, bit 2) in the K5 LED slot. In the
-current temperature-interface stage it stays on when Mode 3 is selected by a
-valid configuration, including while a sensor error is displayed. It is
-off without a valid configuration and throughout sensor assignment.
+| LED | Meaning | Segment | PA bit |
+| --- | --- | --- | --- |
+| HL1 | Heating | A | 0 |
+| HL2 | At setpoint | F | 5 |
+| HL3 | Displayed channel 1 | E | 4 |
+| HL4 | Displayed channel 2 | D | 3 |
+| HL5 | Mode 1 | B | 1 |
+| HL6 | Mode 2 | G | 6 |
+| HL7 | Mode 3 | C | 2 |
+| HL8 | Mode 4 | DP | 7 |
+
+Only the current mode LED is on during normal operation. While an error
+code is displayed, that LED blinks with a one-second period: 500 ms on and
+500 ms off. Other mode LEDs remain off. Repeated screen updates do not
+restart the blink phase; changing the mode or error state starts the ON phase.
+
+The current interface uses Mode 3 (HL7) outside sensor assignment, including
+blinking HL7 for E001 before configuration. Assignment is Mode 4 (HL8):
+normal prompts show steady HL8, and service errors blink HL8.
+HL3/HL4 identify only the channel whose temperature is displayed and are off
+on diagnostics, dashes and service screens. HL1 and HL2 remain off while
+heating/control is not implemented.
 
 The buzzer on PC2 is active, with a built-in oscillator, and sounds when
 the pin is high. Startup produces one short 100 ms signal; it must not
@@ -313,7 +329,7 @@ diagnostic E002/E003. Unknown ROMs produce E004 through the existing profile
 checks; ROM/scratchpad CRC failures produce E005. Stuck-low/failed bus
 transactions, invalid scratchpads, unsupported parasite power and conversion
 timeouts produce E008. Acquisition retries automatically; recovery restores
-temperature and steady HL4 without another beep. Heating stays disabled.
+temperature, HL3 and steady HL7 without another beep. Heating stays disabled.
 
 Display scanning remains cooperative. One software reset occupies about
 960 us and one transferred byte about 560 us, so scanning can be visibly
@@ -472,7 +488,7 @@ After final verification the saved record is applied automatically without
 an additional screen, button press, reset or startup beep. Ordinary diagnostics
 do not overwrite service screens. Enter combined with another held button
 does not confirm a step. After application, the idle screen shows the assigned SENSOR_1 temperature
-with steady HL4 and HL7, or the current diagnostic if sensor presence has
+with steady HL3 and HL7, or the current diagnostic if sensor presence has
 since changed.
 Sensor acquisition continues throughout service and the application handoff.
 Diagnostics remain paused through the application handoff, so they cannot
@@ -587,17 +603,17 @@ valid configuration, the device returns to `CONFIG_INVALID`.
 
 The current interface stage implements only Mode 3 temperature indication
 with real DS18B20 sensors; heating is disabled. Both profiles show only the
-ROM assigned to SENSOR_1, with no channel switching or channel marker.
+ROM assigned to SENSOR_1, with HL3 indicating channel 1 and no channel switching.
 Existing profile-based diagnostics are retained: a two-channel assignment
 still requires both devices, and unknown extras remain errors.
 
 Temperature formatting is right-aligned on the four digits, with leading
-zeros blank and a minus sign for negative readings. First round the original
-reading to the nearest tenth. If that result is within -9.9..99.9 C,
-show one decimal place (including the trailing zero, e.g. 25.0). Otherwise
-round the original reading to whole degrees. Halfway values round away from
-zero. Examples: -55, -10.5 -> -11, -9.9375 -> -9.9, 0.0, 99.9375 -> 99.9,
-100, 100.5 -> 101, 125. The complete DS18B20 range is displayable for testing;
+zeros blank and a minus sign for negative readings. Round the original
+reading to the nearest tenth and always show one decimal place, including
+the trailing zero. Halfway values round away from zero.
+Examples: -55.0, -10.5, -9.9375 -> -9.9, -0.25 -> -0.3, 0.0,
+99.9375 -> 99.9, 100.0, 100.5, 125.0.
+The complete DS18B20 range is displayable for testing;
 this does not extend allowable water setpoints or authorize heating.
 
 Ordinary temperature-screen buttons have no action in this stage. Startup
@@ -607,8 +623,8 @@ screens take precedence over temperature. Returning from service rechecks
 the current sensor setup before restoring temperature or a diagnostic.
 
 The following two-channel display/control rules are future scope. Channel
-identity will use an upper square for channel 1 and a lower square for
-channel 2, not a numeric channel label.
+identity uses HL3 for channel 1 and HL4 for channel 2, never digit or square
+glyphs. Only the displayed channel LED is on.
 
 - In Mode 1, the display shows the selected channel temperature.
 - `Left` selects channel 1 and `Right` selects channel 2 in Mode 1.

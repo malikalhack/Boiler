@@ -113,7 +113,6 @@ EResult_t display_show_temperature(int16_t temperature) {
     uint16_t value;
     uint8_t position = DISPLAY_DIGITS;
     bool negative = temperature < 0;
-    bool fractional;
 
     if (
         temperature < -55 * SENSOR_TEMP_SCALE ||
@@ -124,21 +123,13 @@ EResult_t display_show_temperature(int16_t temperature) {
     magnitude = negative ? (uint16_t)-temperature : (uint16_t)temperature;
     value = (magnitude * DISPLAY_DECIMAL_BASE + SENSOR_TEMP_SCALE / 2U) /
             SENSOR_TEMP_SCALE;
-    fractional = value <= (negative ? 99U : 999U);
-    if (!fractional) {
-        value = (magnitude + SENSOR_TEMP_SCALE / 2U) / SENSOR_TEMP_SCALE;
-    }
-    if (fractional) {
-        frame.slots[--position] = digit_glyphs[value % DISPLAY_DECIMAL_BASE];
-        value /= DISPLAY_DECIMAL_BASE;
-    }
+    frame.slots[--position] = digit_glyphs[value % DISPLAY_DECIMAL_BASE];
+    value /= DISPLAY_DECIMAL_BASE;
     do {
         frame.slots[--position] = digit_glyphs[value % DISPLAY_DECIMAL_BASE];
         value /= DISPLAY_DECIMAL_BASE;
     } while (value != 0U);
-    if (fractional) {
-        frame.slots[DISPLAY_DIGITS - 2U] |= eGlyphPoint;
-    }
+    frame.slots[DISPLAY_DIGITS - 2U] |= eGlyphPoint;
     if (negative) {
         frame.slots[--position] = eGlyphDash;
     }

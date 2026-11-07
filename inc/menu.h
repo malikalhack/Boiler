@@ -57,7 +57,8 @@ void menu_init(EError_t error);
  * @retval eResultOk Profile selection opened and both heaters disabled.
  * @retval eResultBusy Service already owns the display.
  * @retval eResultInvalidArgument Invalid diagnostic.
- * @note Does not modify the active configuration or EEPROM.
+ * @note Call after feedback_init. Selects mode 4 and clears channel LEDs.
+ * Does not modify the active configuration or EEPROM.
  */
 EResult_t menu_open(EError_t error);
 

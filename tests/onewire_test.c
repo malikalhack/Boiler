@@ -641,12 +641,14 @@ static void test_firmware(void) {
     assert(active_error == eErrorConfigInvalid && !config_loaded);
     capture_frame();
     assert(frame_slots[0] == eGlyphE && frame_slots[3] == eGlyph1);
+    assert(frame_slots[4] == eLedMode3);
     press(eButtonEnter);
     assert(menu_get_state() == eMenuProfile);
     press(eButtonRight);
     assert(presence == 1U);
     capture_frame();
     assert(frame_slots[0] == eGlyphP && frame_slots[3] == eGlyph1);
+    assert(frame_slots[4] == eLedMode4);
     assert((frame_slots[0] & eGlyphPoint) == 0U);
     press(eButtonEnter);
     press(eButtonEnter);
@@ -669,12 +671,13 @@ static void test_firmware(void) {
     assert(frame_slots[0] == eGlyphBlank && frame_slots[1] == eGlyph2);
     assert(frame_slots[2] == (eGlyph0 | eGlyphPoint) &&
            frame_slots[3] == eGlyph0);
-    assert(frame_slots[4] == (FEEDBACK_LED_MASK | DISPLAY_MODE3_LED_MASK));
+    assert(frame_slots[4] == (eLedChannel1 | eLedMode3));
     previous_writes = writes;
     boot(0U);
     assert(config_loaded && active_error == eErrorNone);
     capture_frame();
     assert(frame_slots[0] == eGlyphDash);
+    assert(frame_slots[4] == eLedMode3);
     advance(1100U);
     assert(active_error == eErrorNone);
     presence = 0U;

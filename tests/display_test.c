@@ -197,30 +197,27 @@ static void test_temperatures(void) {
 
     display_init();
     display_set_frame(original);
-    check_temperature(-55 * SENSOR_TEMP_SCALE, "-55");
-    check_temperature(-168, "-11");
-    check_temperature(-160, "-10");
+    check_temperature(-55 * SENSOR_TEMP_SCALE, "-55.0");
+    check_temperature(-168, "-10.5");
+    check_temperature(-164, "-10.3");
+    check_temperature(-160, "-10.0");
     check_temperature(-159, "-9.9");
     check_temperature(-8, "-0.5");
+    check_temperature(-4, "-0.3");
     check_temperature(-1, "-0.1");
     check_temperature(0, "0.0");
     check_temperature(1, "0.1");
     check_temperature(25 * SENSOR_TEMP_SCALE, "25.0");
     check_temperature(1599, "99.9");
-    check_temperature(1600, "100");
-    check_temperature(1608, "101");
-    check_temperature(125 * SENSOR_TEMP_SCALE, "125");
+    check_temperature(4, "0.3");
+    check_temperature(1600, "100.0");
+    check_temperature(1608, "100.5");
+    check_temperature(125 * SENSOR_TEMP_SCALE, "125.0");
     for (raw = -55 * SENSOR_TEMP_SCALE;
          raw <= 125 * SENSOR_TEMP_SCALE; raw++) {
         degrees = (double)raw / SENSOR_TEMP_SCALE;
         rounded = (int)(degrees * 10.0 + (raw < 0 ? -0.5 : 0.5));
-        if (rounded >= -99 && rounded <= 999) {
-            snprintf(text, sizeof(text), "%.1f", rounded / 10.0);
-        }
-        else {
-            rounded = (int)(degrees + (raw < 0 ? -0.5 : 0.5));
-            snprintf(text, sizeof(text), "%d", rounded);
-        }
+        snprintf(text, sizeof(text), "%.1f", rounded / 10.0);
         check_temperature(raw, text);
     }
     display_set_frame(original);
@@ -242,14 +239,27 @@ static void test_temperatures(void) {
 /*----------------------------------------------------------------------------*/
 
 static void test_feedback(void) {
-    SDisplayFrame_t frame = {{eGlyph1, eGlyph2, eGlyph3, eGlyph4, 0xA1U}};
+    static const EDisplayLed_t modes[] = {
+        eLedMode1, eLedMode2, eLedMode3, eLedMode4
+    };
+    static const EDisplayLed_t invalid_modes[] = {
+        eLedHeating, eLedAtSetpoint, eLedChannel1, eLedChannel2,
+        (EDisplayLed_t)0U, (EDisplayLed_t)(eLedMode1 | eLedMode2)
+    };
+    SDisplayFrame_t frame = {{eGlyph1, eGlyph2, eGlyph3, eGlyph4, 0x39U}};
     SDisplayFrame_t expected;
     uint16_t elapsed;
+    uint8_t index;
 
+    assert(eLedHeating == 0x01U && eLedAtSetpoint == 0x20U);
+    assert(eLedChannel1 == 0x10U && eLedChannel2 == 0x08U);
+    assert(eLedMode1 == 0x02U && eLedMode2 == 0x40U);
+    assert(eLedMode3 == 0x04U && eLedMode4 == 0x80U);
     display_init();
     display_set_frame(frame);
+    display_set_leds(DISPLAY_MODE_LED_MASK, DISPLAY_MODE_LED_MASK);
     expected = frame;
-    expected.slots[DISPLAY_DIGITS] |= FEEDBACK_LED_MASK;
+    expected.slots[DISPLAY_DIGITS] |= eLedMode3;
     tick = 0U;
     feedback_init(false);
     for (elapsed = 0U; elapsed <= FEEDBACK_BLINK_TICKS; elapsed++) {
@@ -265,14 +275,14 @@ static void test_feedback(void) {
         feedback_update(NULL);
         expected.slots[DISPLAY_DIGITS] = frame.slots[DISPLAY_DIGITS];
         if (elapsed % FEEDBACK_BLINK_TICKS < FEEDBACK_BLINK_TICKS / 2U) {
-            expected.slots[DISPLAY_DIGITS] |= FEEDBACK_LED_MASK;
+            expected.slots[DISPLAY_DIGITS] |= eLedMode3;
         }
         check_frame(expected);
         assert(!buzzer_on);
     }
 
     feedback_set_error(false);
-    expected.slots[DISPLAY_DIGITS] |= FEEDBACK_LED_MASK;
+    expected.slots[DISPLAY_DIGITS] |= eLedMode3;
     check_frame(expected);
     tick += FEEDBACK_BLINK_TICKS;
     feedback_update(NULL);
@@ -298,6 +308,44 @@ static void test_feedback(void) {
     tick += FEEDBACK_BLINK_TICKS / 2U;
     feedback_update(NULL);
     check_frame(expected);
+
+    feedback_set_error(false);
+    for (index = 0U; index < sizeof(modes) / sizeof(modes[0]); index++) {
+        assert(feedback_set_mode(modes[index]) == eResultOk);
+        expected.slots[DISPLAY_DIGITS] =
+            frame.slots[DISPLAY_DIGITS] | modes[index];
+        check_frame(expected);
+        feedback_set_error(true);
+        tick += FEEDBACK_BLINK_TICKS / 2U - 1U;
+        feedback_update(NULL);
+        check_frame(expected);
+        tick++;
+        feedback_update(NULL);
+        check_frame(frame);
+        assert(feedback_set_mode(modes[index]) == eResultOk);
+        feedback_set_error(true);
+        check_frame(frame);
+        tick += FEEDBACK_BLINK_TICKS / 2U;
+        feedback_update(NULL);
+        check_frame(expected);
+        feedback_set_error(false);
+        assert(!buzzer_on);
+    }
+    for (index = 0U;
+         index < sizeof(invalid_modes) / sizeof(invalid_modes[0]); index++) {
+        assert(feedback_set_mode(invalid_modes[index]) ==
+               eResultInvalidArgument);
+        check_frame(expected);
+        assert(!buzzer_on);
+    }
+    feedback_set_error(true);
+    tick += FEEDBACK_BLINK_TICKS / 2U;
+    feedback_update(NULL);
+    check_frame(frame);
+    assert(feedback_set_mode(eLedMode3) == eResultOk);
+    expected.slots[DISPLAY_DIGITS] = frame.slots[DISPLAY_DIGITS] | eLedMode3;
+    check_frame(expected);
+    assert(!buzzer_on);
 }
 /*----------------------------------------------------------------------------*/
 

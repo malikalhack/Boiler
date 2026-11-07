@@ -298,17 +298,13 @@ static void check_error(EError_t error) {
     SDisplayFrame_t frame = {{eGlyphE, eGlyph0, eGlyph0, 0U, 0U}};
 
     frame.slots[3] = glyphs[error];
-    frame.slots[DISPLAY_DIGITS] =
-        (tick % FEEDBACK_BLINK_TICKS) < FEEDBACK_BLINK_TICKS / 2U ?
-        FEEDBACK_LED_MASK : 0U;
+    frame.slots[DISPLAY_DIGITS] = eLedMode4;
     check_frame(frame, 0U);
 }
 /*----------------------------------------------------------------------------*/
 
 static void check_prompt(SDisplayFrame_t frame) {
-    frame.slots[DISPLAY_DIGITS] =
-        (tick % FEEDBACK_BLINK_TICKS) < FEEDBACK_BLINK_TICKS / 2U ?
-        FEEDBACK_LED_MASK : 0U;
+    frame.slots[DISPLAY_DIGITS] = eLedMode4;
     check_frame(frame, 0U);
 }
 /*----------------------------------------------------------------------------*/
@@ -364,7 +360,7 @@ static void test_success(bool two) {
     SSensorRom_t rom;
     SDisplayFrame_t temperature = {
         {eGlyphBlank, eGlyph2, eGlyph5 | eGlyphPoint, eGlyph0,
-         FEEDBACK_LED_MASK | DISPLAY_MODE3_LED_MASK}
+         eLedChannel1 | eLedMode3}
     };
 
     reset_board();
@@ -411,8 +407,7 @@ static void test_success(bool two) {
 /*----------------------------------------------------------------------------*/
 
 static void test_cancel_and_measurement_errors(void) {
-    SDisplayFrame_t error = {{eGlyphE, eGlyph0, eGlyph0, eGlyph1,
-                             FEEDBACK_LED_MASK}};
+    SDisplayFrame_t error = {{eGlyphE, eGlyph0, eGlyph0, eGlyph1, eLedMode3}};
     SBoilerConfig_t config;
 
     reset_board();
@@ -430,9 +425,19 @@ static void test_cancel_and_measurement_errors(void) {
     press(eButtonRight);
     assert(menu_get_state() == eMenuProfile);
     assert(stub_presence == STUB_ALL_PRESENT);
+    check_prompt((SDisplayFrame_t){{
+        eGlyphP, eGlyphBlank, eGlyphBlank, eGlyph1, 0U}});
+    advance(FEEDBACK_BLINK_TICKS / 2U);
+    check_prompt((SDisplayFrame_t){{
+        eGlyphP, eGlyphBlank, eGlyphBlank, eGlyph1, 0U}});
     press(eButtonEnter);
     press(eButtonEnter);
     assert(menu_get_state() == eMenuFailure);
+    check_error(eErrorDeviceCount);
+    advance(FEEDBACK_BLINK_TICKS / 2U);
+    check_frame((SDisplayFrame_t){{
+        eGlyphE, eGlyph0, eGlyph0, eGlyph6, 0U}}, 0U);
+    advance(FEEDBACK_BLINK_TICKS / 2U);
     check_error(eErrorDeviceCount);
     select_presence(0U);
     press(eButtonEnter);
@@ -448,7 +453,7 @@ static void test_cancel_and_measurement_errors(void) {
     assert(menu_get_state() == eMenuIdle);
     assert(writes == 0U);
     assert(storageGet(&config) == eResultNoConfig);
-    tick = (tick / FEEDBACK_BLINK_TICKS + 1U) * FEEDBACK_BLINK_TICKS;
+    tick += FEEDBACK_BLINK_TICKS;
     feedback_update(NULL);
     check_frame(error, 0U);
     prepare_save(true);
@@ -530,6 +535,7 @@ static void test_save_failure_and_retry(void) {
     menu_init(eErrorConfigInvalid);
     stub_presence = 1U;
     config_loaded = false;
+    active_error = eErrorConfigInvalid;
     press(eButtonEnter);
     select_presence(2U);
     press(eButtonEnter);
@@ -620,7 +626,7 @@ static void test_single_fixture_application(uint8_t presence) {
                                   presence == 1U ? eGlyph2 : eGlyph3,
                                   (presence == 1U ? eGlyph5 : eGlyph0) |
                                   eGlyphPoint, eGlyph0,
-                                  FEEDBACK_LED_MASK | DISPLAY_MODE3_LED_MASK}},
+                                  eLedChannel1 | eLedMode3}},
                 0U);
     advance(2U * FEEDBACK_BLINK_TICKS);
     assert(active_error == eErrorNone);
@@ -628,7 +634,7 @@ static void test_single_fixture_application(uint8_t presence) {
     assert(actual_presence == presence);
     assert(menu_open(eErrorNone) == eResultOk);
     check_frame((SDisplayFrame_t){{
-        eGlyphP, eGlyphBlank, eGlyphBlank, eGlyph1, FEEDBACK_LED_MASK}}, 0U);
+        eGlyphP, eGlyphBlank, eGlyphBlank, eGlyph1, eLedMode4}}, 0U);
     press(eButtonLeft);
     assert(menu_get_state() == eMenuIdle);
 }
@@ -645,7 +651,7 @@ static void test_temperature_controls_and_service(void) {
     unsigned int previous_writes;
     SDisplayFrame_t temperature = {
         {eGlyphBlank, eGlyph2, eGlyph5 | eGlyphPoint, eGlyph0,
-         FEEDBACK_LED_MASK | DISPLAY_MODE3_LED_MASK}
+         eLedChannel1 | eLedMode3}
     };
 
     test_success(true);
@@ -654,6 +660,19 @@ static void test_temperature_controls_and_service(void) {
     previous_writes = writes;
     stub_temperatures[0] = 25 * SENSOR_TEMP_SCALE;
     stub_temperatures[1] = 30 * SENSOR_TEMP_SCALE;
+    check_sensors(NULL);
+    check_frame(temperature, 0U);
+    stub_temperatures[0] = -55 * SENSOR_TEMP_SCALE;
+    check_sensors(NULL);
+    check_frame((SDisplayFrame_t){{
+        eGlyphDash, eGlyph5, eGlyph5 | eGlyphPoint, eGlyph0,
+        eLedChannel1 | eLedMode3}}, 0U);
+    stub_temperatures[0] = 125 * SENSOR_TEMP_SCALE;
+    check_sensors(NULL);
+    check_frame((SDisplayFrame_t){{
+        eGlyph1, eGlyph2, eGlyph5 | eGlyphPoint, eGlyph0,
+        eLedChannel1 | eLedMode3}}, 0U);
+    stub_temperatures[0] = 25 * SENSOR_TEMP_SCALE;
     check_sensors(NULL);
     check_frame(temperature, 0U);
     for (index = 0U; index < sizeof(buttons) / sizeof(buttons[0]); index++) {
@@ -681,14 +700,23 @@ static void test_temperature_controls_and_service(void) {
     assert(!menu_is_active());
     temperature = (SDisplayFrame_t){
         {eGlyphBlank, eGlyph2, eGlyph5 | eGlyphPoint, eGlyph0,
-         FEEDBACK_LED_MASK | DISPLAY_MODE3_LED_MASK}
+         eLedChannel1 | eLedMode3}
     };
     check_frame(temperature, 0U);
     stub_presence &= (uint8_t)~1U;
     check_sensors(NULL);
     check_frame((SDisplayFrame_t){{eGlyphE, eGlyph0, eGlyph0, eGlyph2,
-                                  FEEDBACK_LED_MASK |
-                                  DISPLAY_MODE3_LED_MASK}}, 0U);
+                                  eLedMode3}}, 0U);
+    tick += FEEDBACK_BLINK_TICKS / 2U;
+    feedback_update(NULL);
+    show_status();
+    check_frame((SDisplayFrame_t){{
+        eGlyphE, eGlyph0, eGlyph0, eGlyph2, 0U}}, 0U);
+    tick += FEEDBACK_BLINK_TICKS / 2U;
+    feedback_update(NULL);
+    show_status();
+    check_frame((SDisplayFrame_t){{
+        eGlyphE, eGlyph0, eGlyph0, eGlyph2, eLedMode3}}, 0U);
     stub_presence |= 1U;
     check_sensors(NULL);
     check_frame(temperature, 0U);

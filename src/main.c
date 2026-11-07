@@ -117,7 +117,6 @@ int main(void) {
     }
     active_error = error;
     init_menu(error);
-    show_status();
 
     CHECK_STATUS(acroInit(bspGetTick()));
     CHECK_STATUS(acroAddTask(
@@ -146,6 +145,7 @@ int main(void) {
     startup_last_tick = bsp_get_time();
     startup_remaining = BUTTON_DEBOUNCE_TICKS;
     feedback_init(error != eErrorNone);
+    show_status();
     bspStart();
     IGNORE_RETURN(acroRun());   /* should never return */
 
@@ -159,10 +159,9 @@ static void show_status(void) {
     int16_t temperature;
     EResult_t result;
 
-    display_set_leds(
-        DISPLAY_MODE3_LED_MASK,
-        config_loaded ? DISPLAY_MODE3_LED_MASK : 0U
-    );
+    CHECK_RESULT(feedback_set_mode(eLedMode3));
+    feedback_set_error(active_error != eErrorNone);
+    display_set_leds(DISPLAY_CHANNEL_LED_MASK, 0U);
     if (active_error != eErrorNone) {
         CHECK_RESULT(display_show_error(active_error));
     }
@@ -175,6 +174,7 @@ static void show_status(void) {
         else {
             CHECK_RESULT(result);
             CHECK_RESULT(display_show_temperature(temperature));
+            display_set_leds(DISPLAY_CHANNEL_LED_MASK, eLedChannel1);
         }
     }
 }
@@ -195,10 +195,7 @@ static void check_sensors(void *context) {
             return;
         }
         CHECK_RESULT(result);
-        if (error != active_error) {
-            feedback_set_error(error != eErrorNone);
-            active_error = error;
-        }
+        active_error = error;
         show_status();
     }
 }
@@ -230,12 +227,12 @@ static void service_update(void *context) {
         if (result != eResultBusy) {
             CHECK_RESULT(result);
         }
-        feedback_set_error(active_error != eErrorNone);
         init_menu(active_error);
     }
     service_active = menu_is_active();
     if (was_active && !service_active) {
         check_sensors(NULL);
+        show_status();
     }
 }
 /*----------------------------------------------------------------------------*/
