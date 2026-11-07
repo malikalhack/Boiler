@@ -12,6 +12,8 @@
 #include <setjmp.h>
 #include <stdio.h>
 
+#include "task_priorities.h"
+
 /**
  * @def main
  * @brief Rename firmware entry point for fake configuration startup tests.
@@ -82,8 +84,8 @@ EAcroStatus_t acroAddTask(
     assert(!interrupts_enabled);
     assert(params == NULL);
     assert(mode == ePeriodic);
-    assert(priority == 0U);
     assert(descriptor >= eTaskDisplay && descriptor <= eTaskSensors);
+    assert(priority == task_priorities[descriptor]);
     assert((registered & (1U << descriptor)) == 0U);
     registered |= 1U << descriptor;
     if (descriptor == eTaskSensors) {

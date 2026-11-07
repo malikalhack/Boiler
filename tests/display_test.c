@@ -9,22 +9,13 @@
 
 /******************************** Included files ******************************/
 #include <assert.h>
-#include <setjmp.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "display.h"
 #include "sensors.h"
-#include "storage.h"
+#include "feedback.h"
 #include "bsp.h"
-
-/**
- * @def main
- * @brief Rename the firmware entry point for startup tests.
- */
-#define main firmware_main
-#include "../src/main.c"
-#undef main
 
 /********************************* Definitions ********************************/
 
@@ -39,15 +30,8 @@
 static uint8_t last_segments;
 static uint8_t last_select;
 static unsigned int write_count;
-static bool storage_valid;
-static bool ports_initialized;
-static bool interrupts_enabled;
 static volatile AcroTick_t tick;
-static AcroTask_t *registered_task;
-static AcroTask_t *feedback_task;
-static AcroTask_t *buttons_task;
 static bool buzzer_on;
-static jmp_buf scheduler_exit;
 
 /********************** Application Programming Interface *********************/
 
@@ -55,22 +39,6 @@ void bsp_display_write(uint8_t segments, uint8_t select_mask) {
     last_segments = segments;
     last_select = select_mask;
     write_count++;
-}
-/*----------------------------------------------------------------------------*/
-
-void bspInit(void) {
-    ports_initialized = true;
-    interrupts_enabled = false;
-}
-/*----------------------------------------------------------------------------*/
-
-volatile AcroTick_t *bspGetTick(void) {
-    return &tick;
-}
-/*----------------------------------------------------------------------------*/
-
-void bspStart(void) {
-    interrupts_enabled = true;
 }
 /*----------------------------------------------------------------------------*/
 
@@ -83,82 +51,6 @@ void bsp_buzzer_set(bool enabled) {
     buzzer_on = enabled;
 }
 /*----------------------------------------------------------------------------*/
-
-uint8_t bsp_get_buttons(void) {
-    return 0U;
-}
-/*----------------------------------------------------------------------------*/
-
-EResult_t storageInit(void) {
-    assert(ports_initialized);
-    assert(!interrupts_enabled);
-    return storage_valid ? eResultOk : eResultNoConfig;
-}
-/*----------------------------------------------------------------------------*/
-
-EResult_t storageGet(SBoilerConfig_t *config) {
-    static const uint8_t rom[SENSOR_ROM_SIZE] = {
-        0x28U, 0x01U, 0U, 0U, 0U, 0U, 0U, 0x29U
-    };
-    uint8_t index;
-
-    *config = (SBoilerConfig_t){0};
-    config->operating_profile = eProfileSingle;
-    for (index = 0U; index < sizeof(rom); index++) {
-        config->sensor_rom[0][index] = rom[index];
-    }
-    return eResultOk;
-}
-/*----------------------------------------------------------------------------*/
-
-EAcroStatus_t acroInit(volatile AcroTick_t const *time_source) {
-    assert(time_source == &tick);
-    assert(!interrupts_enabled);
-    return eAcroOk;
-}
-/*----------------------------------------------------------------------------*/
-
-EAcroStatus_t acroAddTask(
-    uint8_t descriptor,
-    AcroTask_t *task,
-    AcroParam_t params,
-    uint8_t mode,
-    AcroTick_t period,
-    uint8_t priority
-) {
-    if (descriptor == eTaskDisplay) {
-        assert(task == display_scan);
-        assert(priority == TASK_PRIORITY_DISPLAY);
-        registered_task = task;
-    }
-    else if (descriptor == eTaskFeedback) {
-        assert(task == feedback_update);
-        assert(priority == TASK_PRIORITY_FEEDBACK);
-        feedback_task = task;
-    }
-    else {
-        assert(descriptor == eTaskButtons);
-        assert(task == buttons_poll);
-        assert(priority == TASK_PRIORITY_BUTTONS);
-        buttons_task = task;
-    }
-    assert(params == NULL);
-    assert(mode == ePeriodic);
-    assert(period == 1U);
-    assert(!interrupts_enabled);
-    return eAcroOk;
-}
-/*----------------------------------------------------------------------------*/
-
-EAcroStatus_t acroRun(void) {
-    assert(interrupts_enabled);
-    assert(registered_task != NULL);
-    assert(feedback_task != NULL);
-    assert(buttons_task != NULL);
-    assert(buttons_get_state() == 0U);
-    assert(buzzer_on);
-    longjmp(scheduler_exit, 1);
-}
 
 /****************************** Private functions *****************************/
 static void check_slot(uint8_t position, uint8_t segments) {
@@ -222,23 +114,6 @@ static void test_frames(void) {
     display_scan(NULL);
     display_init();
     check_frame(dashes);
-}
-/*----------------------------------------------------------------------------*/
-
-static void test_startup(bool valid, SDisplayFrame_t expected) {
-    storage_valid = valid;
-    registered_task = NULL;
-    feedback_task = NULL;
-    buttons_task = NULL;
-    tick = 0U;
-    if (setjmp(scheduler_exit) == 0) {
-        (void)firmware_main();
-        assert(false);
-    }
-    check_frame(expected);
-    tick = FEEDBACK_BEEP_TICKS;
-    feedback_task(NULL);
-    assert(!buzzer_on);
 }
 /*----------------------------------------------------------------------------*/
 
@@ -428,19 +303,10 @@ static void test_feedback(void) {
 /*----------------------------------------------------------------------------*/
 
 int main(void) {
-    SDisplayFrame_t error = {
-        {eGlyphE, eGlyph0, eGlyph0, eGlyph1, FEEDBACK_LED_MASK}
-    };
-    SDisplayFrame_t dashes = {
-        {eGlyphDash, eGlyphDash, eGlyphDash, eGlyphDash, FEEDBACK_LED_MASK}
-    };
-
     test_frames();
     test_errors();
     test_temperatures();
     test_feedback();
-    test_startup(false, error);
-    test_startup(true, dashes);
     puts("Display tests passed");
     return 0;
 }

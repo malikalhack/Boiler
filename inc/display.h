@@ -73,7 +73,7 @@ typedef struct SDisplayFrame {
 /********************** Application Programming Interface *********************/
 /**
  * @brief Reset scanning to K1, disable selections, and queue four dashes.
- * @details Call before starting the cooperative scheduler.
+ * @note Call before starting the cooperative scheduler.
  */
 void display_init(void);
 
@@ -96,9 +96,9 @@ void display_set_points(uint8_t mask);
 
 /**
  * @brief Queue a complete frame for the next K1 slot.
- * @details Call only from cooperative tasks, not interrupt handlers.
- * Replaces any frame not yet displayed; digit and LED data latch together.
  * @param[in] frame Bus bytes in K1..K5 order; the last byte drives LEDs.
+ * @note Call only from cooperative tasks, not interrupt handlers.
+ * Replaces any frame not yet displayed; digit and LED data latch together.
  */
 void display_set_frame(SDisplayFrame_t frame);
 
@@ -106,7 +106,7 @@ void display_set_frame(SDisplayFrame_t frame);
  * @brief Update selected LED bits without changing digits or other LEDs.
  * @param[in] mask LED bits owned by the caller.
  * @param[in] value New states of the selected bits.
- * @details The change latches at K1; use only from cooperative tasks/startup.
+ * @note The change latches at K1; use only from cooperative tasks/startup.
  */
 void display_set_leds(uint8_t mask, uint8_t value);
 
@@ -114,7 +114,7 @@ void display_set_leds(uint8_t mask, uint8_t value);
  * @brief Queue an E001..E009 screen while preserving the pending LED byte.
  * @param[in] error Application error code to display.
  * @returns eResultOk if queued; eResultInvalidArgument for zero/unknown codes.
- * @details Invalid codes leave the pending frame unchanged.
+ * @note Invalid codes leave the pending frame unchanged.
  * Call only from startup or cooperative tasks, not interrupt handlers.
  */
 EResult_t display_show_error(EError_t error);
@@ -122,17 +122,17 @@ EResult_t display_show_error(EError_t error);
 /**
  * @brief Show a DS18B20 reading (-55..125 C), preserving all LEDs.
  * @param[in] temperature Signed temperature in 1/16 degree Celsius units.
- * @details Round to tenths within -9.9..99.9, otherwise to whole degrees.
- * Halfway values round away from zero; leading zeros are blank.
  * @retval eResultOk Digits queued.
  * @retval eResultOutOfRange Invalid reading; pending frame is unchanged.
+ * @note Round to tenths within -9.9..99.9, otherwise to whole degrees.
+ * Halfway values round away from zero; leading zeros are blank.
  */
 EResult_t display_show_temperature(int16_t temperature);
 
 /**
  * @brief Output one slot and advance cyclically from K1 through K5.
- * @details Call every system tick from the cooperative scheduler.
  * @param[in] context Unused scheduler parameter.
+ * @note Call every system tick from the cooperative scheduler.
  */
 void display_scan(void *context);
 /******************************************************************************/

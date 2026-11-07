@@ -15,7 +15,7 @@
 /**
  * @enum EResult
  * @brief Operation outcome, distinct from application diagnostic codes.
- * @details Compare explicitly with eResultOk; success is zero, not true.
+ * @note Compare explicitly with eResultOk; success is zero, not true.
  */
 typedef enum EResult {
     eResultOk              = 0, /**< Operation completed successfully. */
@@ -24,10 +24,14 @@ typedef enum EResult {
     eResultNoConfig        = 3, /**< No valid configuration is available. */
     eResultReadFailed      = 4, /**< EEPROM backend could not read data. */
     eResultWriteFailed     = 5, /**< EEPROM backend could not write data. */
-    eResultVerifyFailed    = 6, /**< Readback does not match the saved record. */
+    eResultVerifyFailed    = 6, /**< Readback does not match requested data. */
     eResultNotFound        = 7, /**< Addressed device is absent or unknown. */
     eResultNotReady        = 8, /**< Module has not been initialized. */
-    eResultBusy            = 9  /**< An operation is still in progress. */
+    eResultBusy            = 9, /**< An operation is still in progress. */
+    eResultCrc             = 10, /**< Sensor ROM or scratchpad CRC failed. */
+    eResultBus             = 11, /**< Bus levels or sensor data are invalid. */
+    eResultTimeout         = 12, /**< Sensor conversion did not finish. */
+    eResultPower           = 13  /**< Parasite power is unsupported. */
 } EResult_t;
 
 /**

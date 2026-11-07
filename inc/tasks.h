@@ -17,18 +17,18 @@
  * @brief Unique scheduler descriptors; zero is reserved by AcroSched.
  */
 typedef enum ETask {
-    eTaskDisplay = 1,
-    eTaskFeedback,
-    eTaskButtons,
-    eTaskSensors,
-    eTaskMenu
+    eTaskDisplay = 1, /**< Scan one display or LED position. */
+    eTaskFeedback,    /**< Update the buzzer and error indication. */
+    eTaskButtons,     /**< Poll and debounce the five buttons. */
+    eTaskSensors,     /**< Advance sensor acquisition and diagnostics. */
+    eTaskMenu         /**< Advance assignment and EEPROM handoff. */
 } ETask_t;
 
 /**
  * @def TASK_PRIORITY_DISPLAY
  * @brief Display dispatch priority; equal priorities use registration order.
  */
-#define TASK_PRIORITY_DISPLAY (0U)
+#define TASK_PRIORITY_DISPLAY (1U)
 /**
  * @def TASK_PRIORITY_FEEDBACK
  * @brief Feedback task dispatch priority.
@@ -41,7 +41,7 @@ typedef enum ETask {
 #define TASK_PRIORITY_BUTTONS (0U)
 /**
  * @def TASK_PRIORITY_SENSORS
- * @brief Fake sensor diagnostic dispatch priority.
+ * @brief Sensor acquisition and diagnostic dispatch priority.
  */
 #define TASK_PRIORITY_SENSORS (0U)
 /**

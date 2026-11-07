@@ -544,3 +544,186 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
   including a real force push followed by a fresh clone where the previous
   SHA is demonstrably absent. Skip handling, empty/malformed event data and
   workflow YAML/Python syntax checks also passed.
+
+## 2026-11-07
+
+### Real DS18B20 through software 1-Wire
+
+- The user connected a three-wire DS18B20: separate VDD, common ground and
+  DQ on PD2 with an external pull-up. Implemented the direct backend as the
+  normal build; fake backends remain explicitly selectable. Heating remains
+  disabled, and the sensor code neither changes heater GPIO nor calls an
+  output-enable function.
+- Added standard-speed software open-drain primitives in `bsp/onewire.c`.
+  PD2's output latch stays low; DDR selects output-low or released input.
+  Other PORTD/DDRD bits are preserved. Reset checks idle level, presence
+  and recovery; stuck-low conditions are explicit bus failures.
+- Used 70 us slots: Write 1 low for 6 us, Write 0 low for 60 us, and Read
+  low for 3 us then sample after another 8 us. Reset is 480 us low,
+  presence sampled 70 us after release and 410 us recovery. Interrupt state
+  is preserved, with only timing-critical intervals masked (at most about
+  70 us). Inspected generated AVR instructions: GPIO changes use PD2-only
+  SBI/CBI and the read sample is within the required 15 us window.
+  Actual electrical timing and display smoothness still need board testing.
+- Added a cooperative DS18B20 acquisition state machine. Each 1 ms task
+  invocation performs at most one reset, byte transfer or Search ROM
+  triplet. ROM search handles collisions, checks Dallas CRC-8 and detects
+  more than two devices. Shared the CRC helper with configuration validation.
+- Match ROM selects each DS18B20 for power checks and scratchpad reads.
+  Externally powered devices convert together using Skip ROM / Convert T;
+  conversion waits are non-blocking, with completion checked after 750 ticks
+  and an explicit timeout if still busy at 800 ticks. Parasite power is
+  detected and rejected; no strong pull-up or sensor EEPROM write is added.
+- Scratchpads require a valid nine-byte CRC and configuration; temperatures
+  are normalized for 9..12-bit resolution and checked against -55..125 C.
+  CRC-valid all-zero data is rejected. No power-on +85 C reading is published
+  before a requested conversion completes; legitimate converted +85 C is
+  accepted.
+- Published readings are coherent cached snapshots addressed by full ROM,
+  never search order. Initial acquisition and service refresh return Busy
+  without modifying caller outputs. A periodic scan retains its previous
+  checked snapshot until the next complete result; acquisition failure
+  invalidates it. A 100 ms retry/scan pause gives approximately one-second
+  normal updates. The initial valid-config screen shows dashes while waiting.
+- Enabled normal-build diagnostics and the existing assignment service with
+  real sensors. Enter at S1/S2, CONF and SAVE requests a fresh acquisition;
+  the prompt remains visible while waiting. Right and fake-presence points
+  are disabled on real hardware. Failed checks remain retryable/cancellable;
+  old assignments survive until explicit SAVE succeeds. Unsupported sensor
+  families cannot be assigned. EEPROM layout and format remain unchanged.
+- Missing assigned devices retain E002/E003 and extras E004. ROM/scratchpad
+  CRC failures show E005; bus, invalid-data, power and conversion-timeout
+  failures show E008 instead of halting. Recovery restores temperature and
+  steady HL4 without another beep. HL7 and adaptive formatting are unchanged.
+- Verification: `make test` passed all C suites and 26 Python tests. The new
+  bit-level bus emulator exercises colliding ROM searches, empty/one/two/
+  excess devices, full-ROM addressing, all 2881 representable temperatures,
+  resolution masking, CRC failures, stuck-low/lost bus, parasite power,
+  invalid data, exact conversion/timeout boundaries and tick wrap.
+  Real-firmware integration tests cover E001 entry, startup Left+Right,
+  fresh asynchronous assignment/check/save, automatic application, EEPROM
+  reload, temperature frames, disconnection/reconnection, E004/E005/E008,
+  unsupported families, retry/cancel and old-record preservation.
+  The new real-backend/integration suite also passed ASan/UBSan.
+- AVR builds passed with AVR-GCC 5.4.0:
+  `make -B all` and `make -B all BUILD_DIR=output/real-sensor`
+  (9646 bytes Flash / 470 bytes static RAM);
+  `make -B all BUILD_DIR=output/menu-test FAKE_SENSORS=1 TEST_CONFIG=0`
+  (8550 bytes Flash / 426 bytes static RAM);
+  `make -B all BUILD_DIR=output/test-config FAKE_SENSORS=1 TEST_CONFIG=1
+  TEST_PROFILE=1 FAKE_PRESENT=1`
+  (4940 bytes Flash / 278 bytes static RAM).
+  Also built the real image with `OPT_FLAGS='-Os -fstack-usage'` and inspected
+  callback reports; 554 bytes of SRAM remain beyond static allocations.
+  The linked real image contains neither fake controls nor heater-on code.
+- Updated the specification and board-test instructions. MPLAB's recursive
+  source sets already include the new modules; regenerate CMake and remove
+  fake/RAM macros before its real build. Board verification of the new driver
+  and MPLAB compilation are pending. Git branches were not changed.
+
+### Bench feedback: 12-bit resolution and documentation
+
+- The real-sensor firmware ran overnight on the board. Temperature remained
+  visible and rose when the sensor was warmed by hand. The user noticed
+  subtle display jitter and only 0/3/5/8 in the tenths position. Those digits
+  are consistent with 10-bit, 0.25 C readings; the previous driver preserved
+  the sensor's existing resolution, which was not independently measured.
+- Agreed to configure 12-bit resolution explicitly, but not to change display
+  architecture yet. Cooperative task priorities cannot interrupt a running
+  bus operation: a reset occupies about 960 us and a byte about 560 us.
+  Two sensors add addressed transfers rather than double one operation's
+  duration. Slot-level dispatch and timer-driven 1-Wire were discussed as
+  alternatives; no scheduling change or display ISR was implemented.
+  Display jitter remains a known, unresolved board limitation.
+- Added per-device scratchpad setup before broadcast conversion. CRC and
+  fixed configuration bits are validated; lower resolutions are changed
+  to `0x7F` using Write Scratchpad while preserving TH/TL. A fresh Match ROM /
+  Read Scratchpad verifies the configuration and both alarm bytes.
+  Already configured 12-bit devices are not rewritten. Setup is checked
+  every scan; no Copy Scratchpad command or sensor EEPROM write is used.
+  Readback mismatches and unexpected final resolution report E008; bad CRC
+  retains E005. Failed setup does not publish a temperature or loop forever.
+- Restored section/function separators and completed the new driver's macro,
+  enum, structure, helper and public-API documentation. Public declarations
+  carry full Doxygen documentation without duplicated definition comments.
+  Replaced advisory `@details` with `@note` in project headers, documented
+  affected enumerators and corrected parameter/return descriptions.
+  Doxygen syntax and documented-parameter checks passed without warnings.
+- Extended the bus emulator with volatile Write Scratchpad and pre-conversion
+  reads. Tests verify 9/10/11-bit upgrades, unchanged 12-bit devices, two-device
+  addressing and alarm preservation, ignored writes, corrupted alarm/CRC
+  readback, recovery and rejected lower-resolution conversion results.
+  Unsupported commands, including Copy Scratchpad, fail the emulator.
+  Existing per-poll work limits, exact conversion/timeout boundaries, all
+  2881 raw temperatures and real-firmware integration tests still pass.
+- Verification: `make test` passed all C suites and 26 Python tests.
+  The real-backend/integration suite passed ASan/UBSan.
+  AVR builds passed:
+  `make -B all` and `make -B all BUILD_DIR=output/real-sensor`
+  (9928 bytes Flash / 478 bytes static RAM);
+  `make -B all BUILD_DIR=output/menu-test FAKE_SENSORS=1 TEST_CONFIG=0`
+  (8550 bytes Flash / 426 bytes static RAM);
+  `make -B all BUILD_DIR=output/test-config FAKE_SENSORS=1 TEST_CONFIG=1
+  TEST_PROFILE=1 FAKE_PRESENT=1`
+  (4940 bytes Flash / 278 bytes static RAM).
+  The 12-bit revision still needs board verification.
+- Updated the specification and user-facing bench instructions. Heating
+  remains disabled; Git branches were not changed and no commit was created.
+
+### Driver initialization invariant and expression cleanup
+
+- Removed the separate `initialized` flag entirely: startup already completes
+  sensor initialization before registering scheduler tasks. Update and refresh
+  explicitly require prior initialization; no equivalent check was added
+  to their callers.
+- Initialized the existing snapshot result to NotReady. Search/read retain
+  their pre-initialization error, argument validation and unchanged outputs
+  through the normal snapshot-state check, without a second flag check.
+  The fake backend's controls and behavior are unchanged.
+- Removed redundant parentheses around comparisons joined by logical
+  operators, the real-backend build condition and the shifted temperature
+  byte. Kept required grouping for bit-mask comparisons and mixed AND/OR
+  conditions. Physical bus checks, CRC validation, casts, slot timing,
+  scheduler priorities and display architecture were not changed.
+- Extended real-bus tests to assert initialization before any bus transfer
+  and before scheduler registration, including after firmware reset.
+  Pre-initialization tests verify invalid arguments, NotReady, unchanged
+  ROM/count/temperature outputs and no bus activity. The focused protocol
+  and real-firmware suite passed; final tests also passed ASan/UBSan.
+- AVR builds passed:
+  `make -B all` and `make -B all BUILD_DIR=output/real-sensor`
+  (9890 bytes Flash / 477 bytes static RAM);
+  `make -B all BUILD_DIR=output/test-config FAKE_SENSORS=1 TEST_CONFIG=1
+  TEST_PROFILE=1 FAKE_PRESENT=1`
+  (4940 bytes Flash / 278 bytes static RAM).
+  The physical 1-Wire object is byte-identical to the previous build,
+  confirming unchanged generated timing code. Whitespace and 85-column
+  checks passed. Heating remains disabled and Git branches were not changed.
+
+### Board verification and display scheduling constraint
+
+- Board testing confirmed visibly finer readings with the verified 12-bit
+  sensor configuration. Raising display priority to 1 gave no perceptible
+  improvement: subtle display jitter remains roughly once per second.
+- Software `_delay_us` waits keep the cooperative sensor task running even
+  where interrupts are enabled. These waits, rather than display-module
+  placement, are the blocking work to address in the next driver design.
+- Rejected moving `display_scan`, fully or partly, into BSP/interrupt handling.
+  Digit selection belongs to the display module as a scheduler task; BSP
+  only writes GPIO. Scan frequency must remain controlled by the scheduler
+  period, without an interrupt-specific divider or condition.
+- The next direction to discuss is asynchronous, timer-timed 1-Wire,
+  returning control to the scheduler while wire phases are pending.
+  No new timing engine, display ISR or priority change was implemented.
+
+### Configured-priority checks in scheduler test substitutes
+
+- Fixed a startup-test failure after display priority was raised to 1.
+  The configuration-startup, assignment-menu and real 1-Wire scheduler
+  substitutes still incorrectly required every priority argument to be zero.
+- Added a shared test-only table indexed by task descriptor, using the
+  configured `TASK_PRIORITY_*` constants. All three substitutes check
+  descriptor bounds before comparing the supplied priority to that table.
+  Priority validation is retained; firmware priorities are not changed.
+- `make test` passed all C suites, all eight RAM startup profile/presence
+  combinations and all 26 Python tests. Git branches were not changed.

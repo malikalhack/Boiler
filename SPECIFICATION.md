@@ -123,7 +123,7 @@ on during normal operation. While an error is active, it blinks with a
 one-second period: 500 ms on and 500 ms off (50 percent duty cycle).
 
 HL7 is connected to segment C (PA2, bit 2) in the K5 LED slot. In the
-current fake-temperature stage it stays on when Mode 3 is selected by a
+current temperature-interface stage it stays on when Mode 3 is selected by a
 valid configuration, including while a sensor error is displayed. It is
 off without a valid configuration and throughout sensor assignment.
 
@@ -214,6 +214,25 @@ communication.
 When software 1-Wire is selected, PD2 is used. DS2480B and direct 1-Wire must
 never be enabled in the same build.
 
+The implemented direct backend requires three-wire DS18B20 connections:
+separate VDD, common GND, and DQ on PD2 with an external pull-up. PD2 is
+open-drain in software: its output latch remains zero, DDR switches between
+output-low and released input, and the internal pull-up is disabled. Other
+PORTD/DDRD bits, including the safe heater outputs, are preserved. Parasite
+power is detected by Read Power Supply and rejected with E008; no strong
+pull-up or parasite-power conversion is implemented.
+
+Standard-speed slots use 6 us low for Write 1, 60 us for Write 0, and a
+3 us low followed by 8 us to the read sample. Slot duration is at least
+70 us. Reset uses 480 us low, a presence sample 70 us after release and
+410 us recovery. Only timing-critical low/sample intervals mask interrupts,
+preserving their incoming state; the longest masked interval is about 70 us.
+The approximately 1 ms reset is the largest indivisible operation. Byte
+transfers and search triplets are spread over cooperative task invocations.
+Actual line rise time and display smoothness require board verification.
+Protocol and timing reference:
+[DS18B20 data sheet](https://www.analog.com/media/en/technical-documentation/data-sheets/DS18B20.pdf).
+
 ## 3. Sensors and ROM Assignment
 
 The configuration contains an operating profile that determines how many
@@ -281,6 +300,64 @@ does not restart the sweep or change presence. Timing is non-blocking,
 handles tick wrap and retains elapsed partial intervals after a late poll.
 The low-level initialization and manual fixture controls remain available
 for deterministic tests without starting the sweep.
+
+### 3.2. Real DS18B20 Backend
+
+The default build (`SENSORS_USE_FAKE=0`) uses software 1-Wire. A task polled
+each tick performs at most one reset, one byte, or one Search ROM triplet
+per invocation. Discovery handles ROM collisions and validates Dallas CRC-8,
+with a capacity of two devices; further branches produce E006.
+
+Initialization completes before the polling task is registered; update and
+refresh require a prior `sensors_init()` call and do not check an initialization
+flag at runtime. Before initialization, search/read report NotReady through
+the initial snapshot state; argument validation remains active.
+
+Each discovered DS18B20 is addressed with Match ROM for Read Power Supply
+and Read Scratchpad. After verifying external power, the backend reads and
+validates the scratchpad and ensures 12-bit resolution (0.0625 C). If needed,
+Write Scratchpad changes the volatile configuration to `0x7F`, preserving
+the original TH/TL alarm bytes. A second scratchpad read verifies both the
+configuration and alarms; mismatches fail with E008, while bad CRC gives E005.
+Already configured 12-bit devices are not rewritten. No Copy Scratchpad
+command or sensor EEPROM write is performed; setup is checked every scan.
+
+Only after all devices pass setup does a broadcast Convert T start conversion.
+The task waits at least 750 ticks without blocking, checks completion through
+read slots and reports E008 if still busy at 800 ticks. Readings are checked
+against -55..125 C and accepted only after the entire nine-byte scratchpad
+passes CRC and confirms 12-bit configuration.
+All-zero data is rejected even though its CRC is zero. Power-on +85 C is
+never published before an explicitly requested conversion has completed;
+a legitimate converted +85 C remains valid.
+
+The backend publishes one coherent cache only after the whole acquisition
+succeeds. A new periodic acquisition retains the previous checked snapshot
+until it completes; a failed acquisition immediately invalidates that cache.
+An initial acquisition or explicit service refresh reports Busy, not a
+synthetic temperature or an application error. The initial display is
+dashes for a valid configuration until the first result; E001 still takes
+precedence for invalid assignments. After each result a 100 ms pause precedes
+the next scan; normal updates take approximately one second, rather than
+the fake backend's 500 ms sweep interval.
+
+Empty-bus discovery produces a zero-device snapshot and the assigned-sensor
+diagnostic E002/E003. Unknown ROMs produce E004 through the existing profile
+checks; ROM/scratchpad CRC failures produce E005. Stuck-low/failed bus
+transactions, invalid scratchpads, unsupported parasite power and conversion
+timeouts produce E008. Acquisition retries automatically; recovery restores
+temperature and steady HL4 without another beep. Heating stays disabled.
+
+Display scanning remains cooperative. One software reset occupies about
+960 us and one transferred byte about 560 us, so scanning can be visibly
+delayed despite enabled interrupts between critical timing intervals.
+Task priorities cannot preempt an already running bus operation. Two sensors
+add more addressed transfers, not twice the duration of one reset or byte.
+Board testing confirmed occasional subtle display jitter; its scheduling
+solution is not yet agreed, and scanning has not been moved to an interrupt.
+Digit switching must remain in the display module as a scheduler task.
+BSP only writes GPIO; scan frequency is controlled by the scheduler period,
+not by an interrupt-specific divider or condition.
 
 ## 4. EEPROM Configuration
 
@@ -362,8 +439,7 @@ PROFILE  select single-channel profile, press Enter
 S1?      connect only the sensor at location 1, press Enter
 S1OK     keep the ROM code in temporary RAM
 CHECK    verify the single connected sensor, press Enter
-SAVE?    confirm the EEPROM write with Enter
-DONE     verify the record; Enter applies the saved configuration
+SAVE?    Enter rechecks sensors, writes, verifies and applies automatically
 ```
 
 For `TWO_CHANNEL`:
@@ -375,8 +451,7 @@ S1OK     keep the first ROM code in temporary RAM
 S2?      disconnect the sensor at location 1, press Enter
 S2OK     keep the second ROM code in temporary RAM
 CHECK    connect both sensors, press Enter
-SAVE?    confirm the EEPROM write with Enter
-DONE     verify the record; Enter applies the saved configuration
+SAVE?    Enter rechecks sensors, writes, verifies and applies automatically
 ```
 
 Exactly the number of suitable devices required by the selected profile must
@@ -389,10 +464,10 @@ procedure succeeds. If the procedure is interrupted, the previous valid
 configuration remains unchanged. If no previous configuration exists, the
 device remains in the error state.
 
-### 5.3. Four-Digit Service UI and Fake Controls
+### 5.3. Four-Digit Service UI and Backend Controls
 
-The current service is enabled with `SENSORS_USE_FAKE=1` and
-`CONFIG_USE_TEST=0`. Unlike the RAM configuration test mode, this service
+The service is enabled with `CONFIG_USE_TEST=0` for both real and fake
+backends. Unlike the RAM configuration test mode, this service
 **writes EEPROM after explicit confirmation**. Heater outputs stay off.
 
 | Screen | Action |
@@ -408,10 +483,18 @@ assignment immediately advances to the next prompt; S1OK/S2OK are conceptual
 states, not additional confirmation screens. At each assignment step exactly
 one suitable device must be present. Two-channel assignments must be distinct.
 
-Right cycles simulated presence: neither -> first -> second -> both -> neither.
+In fake builds, Right cycles simulated presence:
+neither -> first -> second -> both -> neither.
 The first two digit decimal points indicate fixture presence, independently
 of assigned locations. Right never writes EEPROM or assigns a ROM by index.
 This is a test control, not a feature for the real sensor backend.
+
+For real sensors, Right has no action and fixture decimal points are off.
+Connect/disconnect physical sensors as prompted. Enter at S1/S2, CONF and
+SAVE requests a fresh complete acquisition, including conversion and CRC,
+before assigning, advancing or starting EEPROM writing. The prompt stays
+visible while Busy; a measurement error remains retryable with Enter or
+cancellable with Left. Unsupported sensor families cannot be assigned.
 
 Left cancels any step before writing and restores the current diagnostic
 or temperature screen with no EEPROM change. Changing fake presence during
@@ -470,8 +553,9 @@ have priority over unassigned extras, which produce E004. If both devices
 are missing, E002 is displayed. Recovery restores the assigned SENSOR_1
 temperature and makes HL4 steady without repeating the startup beep.
 
-The normal build loads and validates EEPROM assignments but does not yet
-perform real bus checks. No build at this stage enables heater outputs.
+The normal build loads and validates EEPROM assignments and performs the
+real bus acquisition described in Section 3.2. No build at this stage enables
+heater outputs.
 The RAM test mode is not a persistent configuration or a sensor service menu.
 
 ## 7. Error Codes
@@ -565,7 +649,7 @@ valid configuration, the device returns to `CONFIG_INVALID`.
 ### User Interface Displays
 
 The current interface stage implements only Mode 3 temperature indication
-with fake sensors; no build enables heating. Both profiles show only the
+with real or fake sensors; no build enables heating. Both profiles show only the
 ROM assigned to SENSOR_1, with no channel switching or channel marker.
 Existing profile-based diagnostics are retained: a two-channel assignment
 still requires both devices, and unknown extras remain errors.
@@ -621,9 +705,9 @@ channel 2, not a numeric channel label.
   a non-blocking cooperative handler. Left, Right and Enter do not repeat.
 - Raw release suspends repeats immediately, while its release event still
   requires debounce. Late polling does not generate bursts of missed repeats.
-- Fake-sensor builds with EEPROM configuration route button events to the
-  E001 assignment menu. RAM configuration test builds and builds without a
-  sensor backend retain state-only polling. No button event enables heaters.
+- Real and fake builds with EEPROM configuration route button events to the
+  assignment menu. RAM configuration test builds retain state-only polling.
+  No button event enables heaters.
 
 ## 9. AcroSched Constraints
 

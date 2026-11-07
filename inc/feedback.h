@@ -43,9 +43,9 @@ void feedback_init(bool error);
 
 /**
  * @brief Select blinking or continuous HL4 without restarting the beep.
- * @details A changed state restarts HL4 in its ON phase.
  * @param[in] error True for error indication; false for normal indication.
- * @note Call only from cooperative tasks.
+ * @note A changed state restarts HL4 in its ON phase.
+ * Call only from cooperative tasks.
  */
 void feedback_set_error(bool error);
 

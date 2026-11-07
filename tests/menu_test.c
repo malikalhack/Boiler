@@ -13,6 +13,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "task_priorities.h"
+
 /**
  * @def main
  * @brief Run the real firmware startup with mocked board/scheduler.
@@ -169,8 +171,9 @@ EAcroStatus_t acroAddTask(
     uint8_t mode, AcroTick_t period, uint8_t priority
 ) {
     assert(!interrupts_enabled);
-    assert(params == NULL && mode == ePeriodic && priority == 0U);
+    assert(params == NULL && mode == ePeriodic);
     assert(descriptor >= eTaskDisplay && descriptor <= eTaskMenu);
+    assert(priority == task_priorities[descriptor]);
     assert((registered & (1U << descriptor)) == 0U);
     registered |= 1U << descriptor;
     assert(period == (descriptor == eTaskSensors ? BOILER_TICK_HZ / 10U : 1U));

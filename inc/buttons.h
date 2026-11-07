@@ -36,11 +36,11 @@
  * @brief Logical button bits, in PC3..PC7 order.
  */
 typedef enum EButton {
-    eButtonDown  = 0x01U,
-    eButtonRight = 0x02U,
-    eButtonUp    = 0x04U,
-    eButtonLeft  = 0x08U,
-    eButtonEnter = 0x10U
+    eButtonDown  = 0x01U, /**< Down input on PC3. */
+    eButtonRight = 0x02U, /**< Right input on PC4. */
+    eButtonUp    = 0x04U, /**< Up input on PC5. */
+    eButtonLeft  = 0x08U, /**< Left input on PC6. */
+    eButtonEnter = 0x10U  /**< Enter input on PC7. */
 } EButton_t;
 
 /**
@@ -48,16 +48,16 @@ typedef enum EButton {
  * @brief Debounced transitions and held Up/Down repeats.
  */
 typedef enum EButtonEvent {
-    eButtonPressed  = 0,
-    eButtonReleased = 1,
-    eButtonRepeat   = 2
+    eButtonPressed  = 0, /**< Stable press after debounce. */
+    eButtonReleased = 1, /**< Stable release after debounce. */
+    eButtonRepeat   = 2  /**< Held Up/Down repeat after the hold interval. */
 } EButtonEvent_t;
 
 /**
  * @brief Receive one button event synchronously from the polling task.
  * @param[in] button Button producing the event.
  * @param[in] event Press, release or repeat.
- * @details Must be short, non-blocking and must not reenter the button driver.
+ * @note Must be short, non-blocking and must not reenter the button driver.
  */
 typedef void (*ButtonHandler_t)(EButton_t button, EButtonEvent_t event);
 
@@ -65,7 +65,7 @@ typedef void (*ButtonHandler_t)(EButton_t button, EButtonEvent_t event);
 /**
  * @brief Reset button state and sample initial inputs.
  * @param[in] handler Event receiver, or NULL for state-only polling.
- * @details Held startup buttons require debounce before a press is reported.
+ * @note Held startup buttons require debounce before a press is reported.
  * Call from startup or cooperative tasks, not from interrupts.
  */
 void buttons_init(ButtonHandler_t handler);
@@ -73,7 +73,7 @@ void buttons_init(ButtonHandler_t handler);
 /**
  * @brief Poll all buttons independently and deliver debounced events.
  * @param[in] context Unused scheduler parameter.
- * @details Call every tick. Elapsed time handles tick wrap; gaps must be
+ * @note Call every tick. Elapsed time handles tick wrap; gaps must be
  * shorter than a full tick wrap. Late polls deliver at most one repeat per
  * button, without bursts of missed repeats. Raw release suspends repeats
  * immediately, before the debounced release event.
@@ -83,7 +83,7 @@ void buttons_poll(void *context);
 /**
  * @brief Return a bit mask of currently debounced pressed buttons.
  * @returns OR of EButton_t bits, or zero when none are pressed.
- * @details Call only from startup or cooperative tasks.
+ * @note Call only from startup or cooperative tasks.
  */
 uint8_t buttons_get_state(void);
 /******************************************************************************/

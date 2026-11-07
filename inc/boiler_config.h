@@ -102,6 +102,10 @@
 #error "Select exactly one 1-Wire driver"
 #endif
 
+#if ((SENSORS_USE_FAKE == 0U) && (BOILER_USE_SOFT_1WIRE != 1U))
+#error "Only software 1-Wire is implemented for real sensors"
+#endif
+
 #if ((BOILER_USE_CPC1008N + BOILER_USE_MOC30XX) != 1U)
 #error "Select exactly one heater output driver"
 #endif

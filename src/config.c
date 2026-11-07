@@ -13,6 +13,7 @@
 
 #include "boiler_config.h"
 #include "config.h"
+#include "crc8.h"
 #include "sensors.h"
 #if (CONFIG_USE_TEST == 1)
 #include "sensors_fake.h"
@@ -25,39 +26,16 @@
  */
 #define CONFIG_SENSOR_COUNT (2U)
 
-/**
- * @def CONFIG_DS18B20_FAMILY
- * @brief DS18B20 1-Wire family byte.
- */
-#define CONFIG_DS18B20_FAMILY (0x28U)
-
-/**
- * @def CONFIG_CRC_POLYNOMIAL
- * @brief Reflected Dallas/Maxim CRC-8 polynomial.
- */
-#define CONFIG_CRC_POLYNOMIAL (0x8CU)
-
-/**
- * @def CONFIG_BYTE_BITS
- * @brief Number of bits per ROM byte.
- */
-#define CONFIG_BYTE_BITS (8U)
-
 /****************************** Private functions *****************************/
 
+/**
+ * @brief Validate a stored DS18B20 family code and complete ROM CRC.
+ * @param[in] rom Complete stored ROM bytes.
+ * @returns True for a supported address with a zero CRC remainder.
+ */
 static bool rom_valid(const uint8_t *rom) {
-    uint8_t crc = 0U;
-    uint8_t byte;
-    uint8_t bit;
-
-    for (byte = 0U; byte < SENSOR_ROM_SIZE; byte++) {
-        crc ^= rom[byte];
-        for (bit = 0U; bit < CONFIG_BYTE_BITS; bit++) {
-            crc = (crc >> 1U) ^
-                ((crc & 1U) != 0U ? CONFIG_CRC_POLYNOMIAL : 0U);
-        }
-    }
-    return (rom[0] == CONFIG_DS18B20_FAMILY) && (crc == 0U);
+    return (rom[0] == SENSOR_FAMILY_DS18B20) &&
+           (crc8(rom, SENSOR_ROM_SIZE) == 0U);
 }
 
 /********************** Application Programming Interface *********************/
@@ -124,7 +102,6 @@ EResult_t config_load(SBoilerConfig_t *config) {
 }
 /*----------------------------------------------------------------------------*/
 
-#if (SENSORS_USE_FAKE == 1)
 EResult_t config_check_sensors(const SBoilerConfig_t *config, EError_t *error) {
     SSensorRom_t discovered[CONFIG_SENSOR_COUNT];
     SSensorRom_t rom;
@@ -153,6 +130,14 @@ EResult_t config_check_sensors(const SBoilerConfig_t *config, EError_t *error) {
         return eResultOk;
     }
     if (result != eResultOk) {
+#if (SENSORS_USE_FAKE == 0)
+        if ((result == eResultCrc) || (result == eResultBus) ||
+            (result == eResultPower) || (result == eResultTimeout) ||
+            (result == eResultVerifyFailed)) {
+            *error = sensors_error(result);
+            return eResultOk;
+        }
+#endif
         return result;
     }
     for (index = 0U; index < count; index++) {
@@ -188,4 +173,3 @@ EResult_t config_check_sensors(const SBoilerConfig_t *config, EError_t *error) {
     return eResultOk;
 }
 /******************************************************************************/
-#endif /* SENSORS_USE_FAKE */

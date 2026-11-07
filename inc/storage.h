@@ -74,7 +74,7 @@ EResult_t storageSave(const SBoilerConfig_t *config);
  * @retval eResultOk Transaction accepted; call storage_save_poll each tick.
  * @retval eResultBusy Another save or hardware write is in progress.
  * @returns Other errors follow storageSave.
- * @details Does not write during this call. Do not call storageInit or
+ * @note Does not write during this call. Do not call storageInit or
  * storageSave during the transaction. Once started, poll until completion.
  */
 EResult_t storage_save_begin(const SBoilerConfig_t *config);
@@ -85,7 +85,7 @@ EResult_t storage_save_begin(const SBoilerConfig_t *config);
  * @retval eResultOk Complete record was committed and verified.
  * @retval eResultNotReady No transaction has been started.
  * @returns Specific EEPROM or verification failure on error.
- * @details Each call writes at most one byte or performs one read/verify step.
+ * @note Each call writes at most one byte or performs one read/verify step.
  * Failed saves leave the cached active configuration unchanged. The final
  * result remains available until the next transaction.
  */

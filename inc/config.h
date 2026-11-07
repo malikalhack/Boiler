@@ -18,8 +18,8 @@
  * @brief Persisted profile values; zero is invalid.
  */
 typedef enum EProfile {
-    eProfileSingle = 1,
-    eProfileTwo    = 2
+    eProfileSingle = 1, /**< One assigned sensor and heating channel. */
+    eProfileTwo    = 2  /**< Two assigned sensors and heating channels. */
 } EProfile_t;
 
 /********************** Application Programming Interface *********************/
@@ -30,7 +30,7 @@ typedef enum EProfile {
  * @retval eResultOk Required ROMs have DS18B20 family and valid CRC.
  * @retval eResultInvalidArgument config is NULL.
  * @retval eResultNoConfig Invalid profile, required ROM or duplicate ROMs.
- * @details The second ROM is unused in the single-channel profile.
+ * @note The second ROM is unused in the single-channel profile.
  * Application settings remain opaque at this stage.
  */
 EResult_t config_validate(const SBoilerConfig_t *config);
@@ -39,7 +39,7 @@ EResult_t config_validate(const SBoilerConfig_t *config);
  * @brief Load a validated configuration from EEPROM or explicit RAM test mode.
  * @param[out] config Destination, unchanged on failure.
  * @returns Validation or storage operation result.
- * @details Never writes EEPROM. CONFIG_USE_TEST bypasses all EEPROM calls.
+ * @note Never writes EEPROM. CONFIG_USE_TEST bypasses all EEPROM calls.
  */
 EResult_t config_load(SBoilerConfig_t *config);
 
@@ -49,11 +49,13 @@ EResult_t config_load(SBoilerConfig_t *config);
  * @param[out] error Application diagnostic, unchanged on operation failure.
  * @retval eResultOk Diagnostic is available, including eErrorNone.
  * @retval eResultInvalidArgument NULL argument.
- * @returns Other sensor backend failures are propagated.
- * @details Invalid assignments produce E001 before bus access; missing first
+ * @retval eResultBusy A real acquisition has not completed; error is unchanged.
+ * @returns Other unexpected sensor backend failures are propagated.
+ * @note Invalid assignments produce E001 before bus access; missing first
  * and second required devices produce E002 and E003 respectively. Unknown
  * devices produce E004. Missing assigned devices have priority over extras.
- * Available only with SENSORS_USE_FAKE=1 until real conversions exist.
+ * Real ROM/scratchpad CRC failures produce E005; bus, power, invalid data
+ * and conversion-timeout or RAM readback failures produce E008.
  * Passing this check does not authorize heating.
  */
 EResult_t config_check_sensors(const SBoilerConfig_t *config, EError_t *error);

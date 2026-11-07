@@ -10,14 +10,17 @@
 /******************************** Included files ******************************/
 #include "boiler_config.h"
 
-#if ((SENSORS_USE_FAKE == 1) && (CONFIG_USE_TEST == 0))
+#if (CONFIG_USE_TEST == 0)
 #include <string.h>
 
 #include "acrosched_defs.h"
 #include "bsp.h"
 #include "display.h"
 #include "menu.h"
+#include "sensors.h"
+#if (SENSORS_USE_FAKE == 1)
 #include "sensors_fake.h"
+#endif
 
 /********************************* Definitions ********************************/
 /**
@@ -97,20 +100,26 @@ static void fail(EMenuState_t retry, EError_t error, EResult_t result) {
 /*----------------------------------------------------------------------------*/
 
 static void measure(uint8_t assignment) {
-    SSensorRom_t roms[SENSOR_FAKE_COUNT];
+    SSensorRom_t roms[SENSOR_CAPACITY];
     SBoilerConfig_t trial;
     uint8_t count;
     EResult_t result;
     EMenuState_t retry = assignment == 0U ? eMenuMeasure1 : eMenuMeasure2;
 
-    result = sensors_search(roms, SENSOR_FAKE_COUNT, &count);
+    result = sensors_search(roms, SENSOR_CAPACITY, &count);
+    if (result == eResultBusy) {
+        return;
+    }
     if (result != eResultOk) {
-        fail(retry, result == eResultOutOfRange ?
-             eErrorDeviceCount : eErrorSoft1Wire, result);
+        fail(retry, sensors_error(result), result);
         return;
     }
     if (count != 1U) {
         fail(retry, eErrorDeviceCount, eResultOk);
+        return;
+    }
+    if (roms[0].bytes[0] != SENSOR_FAMILY_DS18B20) {
+        fail(retry, eErrorUnknownSensor, eResultNoConfig);
         return;
     }
     trial = candidate;
@@ -138,6 +147,9 @@ static void verify(bool save) {
     EMenuState_t retry = save ? eMenuPreSave : eMenuVerify;
 
     result = config_check_sensors(&candidate, &error);
+    if (result == eResultBusy) {
+        return;
+    }
     if (result != eResultOk) {
         fail(retry, eErrorSoft1Wire, result);
         return;
@@ -198,8 +210,10 @@ EResult_t menu_open(EError_t error, uint8_t presence) {
 /*----------------------------------------------------------------------------*/
 
 void menu_on_button(EButton_t button, EButtonEvent_t event) {
+#if (SENSORS_USE_FAKE == 1)
     uint8_t index;
     EResult_t result;
+#endif
 
     if (
         (state == eMenuSaving)  ||
@@ -225,6 +239,7 @@ void menu_on_button(EButton_t button, EButtonEvent_t event) {
         }
         return;
     }
+#if (SENSORS_USE_FAKE == 1)
     if ((button == eButtonRight) && (event == eButtonPressed)) {
         presence_mask = (presence_mask + 1U) & MENU_PRESENCE_MASK;
         for (index = 0U; index < SENSOR_FAKE_COUNT; index++) {
@@ -238,6 +253,7 @@ void menu_on_button(EButton_t button, EButtonEvent_t event) {
         render();
         return;
     }
+#endif
     if (state == eMenuProfile) {
         if (button == eButtonUp) {
             candidate.operating_profile = eProfileTwo;
@@ -256,6 +272,13 @@ void menu_on_button(EButton_t button, EButtonEvent_t event) {
             case eMenuFailure: state = retry_state; break;
             default: break;
         }
+#if (SENSORS_USE_FAKE == 0)
+        if ((state == eMenuMeasure1) || (state == eMenuMeasure2) ||
+            (state == eMenuVerify) || (state == eMenuPreSave)) {
+            sensors_refresh();
+            last_result = eResultBusy;
+        }
+#endif
     }
     render();
 }
@@ -299,4 +322,4 @@ EResult_t menu_get_result(void) {
     return last_result;
 }
 /******************************************************************************/
-#endif /* SENSORS_USE_FAKE && CONFIG_USE_TEST */
+#endif /* CONFIG_USE_TEST */

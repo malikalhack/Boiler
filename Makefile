@@ -34,7 +34,9 @@ SOURCES     := $(SRC_DIR)/main.c $(SRC_DIR)/storage.c \
 			   $(SRC_DIR)/feedback.c \
 			   $(SRC_DIR)/buttons.c \
 			   $(SRC_DIR)/sensors_fake.c \
+			   $(SRC_DIR)/sensors_soft.c \
 			   $(SRC_DIR)/menu.c \
+			   $(BSP_DIR)/onewire.c \
 			   $(BSP_DIR)/bsp.c
 OBJECTS     := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SOURCES))
 ELF         := $(BUILD_DIR)/$(TARGET).elf
@@ -72,8 +74,6 @@ test:
 	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Itests/stubs -I$(INC_DIR) -Ilib \
 		-I$(BSP_DIR) tests/display_test.c $(SRC_DIR)/display.c \
 		$(SRC_DIR)/feedback.c \
-		$(SRC_DIR)/buttons.c \
-		$(SRC_DIR)/config.c \
 		-o $(BUILD_DIR)/tests/display_test
 	$(BUILD_DIR)/tests/display_test
 	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Itests/stubs -I$(INC_DIR) -Ilib \
@@ -118,4 +118,11 @@ test:
 		$(SRC_DIR)/feedback.c $(SRC_DIR)/buttons.c \
 		-o $(BUILD_DIR)/tests/menu_test
 	$(BUILD_DIR)/tests/menu_test
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+		-Itests/stubs -I$(INC_DIR) -Ilib -I$(BSP_DIR) \
+		tests/onewire_test.c $(SRC_DIR)/sensors_soft.c $(SRC_DIR)/menu.c \
+		$(SRC_DIR)/storage.c $(SRC_DIR)/config.c $(SRC_DIR)/display.c \
+		$(SRC_DIR)/feedback.c $(SRC_DIR)/buttons.c \
+		-o $(BUILD_DIR)/tests/onewire_test
+	$(BUILD_DIR)/tests/onewire_test
 	$(PYTHON) -m unittest discover -s tests -p '*_test.py'

@@ -22,8 +22,8 @@
  * @brief Selects one of the two heater outputs.
  */
 typedef enum EBspHeater {
-    eBspHeater1 = 0,
-    eBspHeater2 = 1
+    eBspHeater1 = 0, /**< First heater output on PD4. */
+    eBspHeater2 = 1  /**< Second heater output on PD5. */
 } EBspHeater_t;
 
 /********************** Application Programming Interface *********************/
@@ -67,7 +67,7 @@ void bspStart(void);
  * @param[in] segments Active-high PA0..PA7 segment or LED data.
  * @param[in] select_mask Active-high PB0..PB4 selections; upper bits ignored.
  * Pass zero to leave all positions disabled. Scanning uses one-hot masks.
- * @details Call only from startup or cooperative tasks, not from interrupts.
+ * @note Call only from startup or cooperative tasks, not from interrupts.
  */
 void bsp_display_write(uint8_t segments, uint8_t select_mask);
 
@@ -91,7 +91,7 @@ void bspHeaterOff(EBspHeater_t heater);
  * @retval eResultOk The AVR EEPROM read completed.
  * @retval eResultInvalidArgument Buffer is NULL or size is zero.
  * @retval eResultOutOfRange The range exceeds EEPROM capacity.
- * @details AVR EEPROM reads provide no hardware failure status.
+ * @note AVR EEPROM reads provide no hardware failure status.
  */
 EResult_t bspEepromRead(uint16_t address, uint8_t *data, uint16_t size);
 
@@ -103,7 +103,7 @@ EResult_t bspEepromRead(uint16_t address, uint8_t *data, uint16_t size);
  * @retval eResultOk The AVR EEPROM update completed.
  * @retval eResultInvalidArgument Buffer is NULL or size is zero.
  * @retval eResultOutOfRange The range exceeds EEPROM capacity.
- * @details AVR updates provide no hardware failure status; storage verifies
+ * @note AVR updates provide no hardware failure status; storage verifies
  * the record by reading it back.
  */
 EResult_t bspEepromUpdate(uint16_t address, const uint8_t *data, uint16_t size);

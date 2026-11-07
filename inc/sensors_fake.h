@@ -34,7 +34,7 @@
  * @param[out] rom Complete DS18B20 ROM with a valid Dallas CRC.
  * @retval eResultOk ROM copied.
  * @retval eResultInvalidArgument NULL output or invalid index.
- * @details Does not require initialization; output is unchanged on failure.
+ * @note Does not require initialization; output is unchanged on failure.
  */
 EResult_t sensors_fake_get_rom(uint8_t index, SSensorRom_t *rom);
 
@@ -54,7 +54,7 @@ EResult_t sensors_fake_set_present(uint8_t index, bool present);
  * @retval eResultOk Mask copied.
  * @retval eResultInvalidArgument Output is NULL.
  * @retval eResultNotReady sensors_init has not been called.
- * @details Output is unchanged on failure.
+ * @note Output is unchanged on failure.
  */
 EResult_t sensors_fake_get_presence(uint8_t *presence);
 
@@ -66,7 +66,7 @@ EResult_t sensors_fake_get_presence(uint8_t *presence);
  * @retval eResultInvalidArgument Invalid index.
  * @retval eResultOutOfRange Temperature outside DS18B20 range, -55..125 C.
  * @retval eResultNotReady sensors_init has not been called.
- * @details No state changes on failure. Controls are cooperative/startup only.
+ * @note No state changes on failure. Controls are cooperative/startup only.
  */
 EResult_t sensors_fake_set_temperature(uint8_t index, int16_t temperature);
 
@@ -81,11 +81,11 @@ EResult_t sensors_fake_sweep_start(uint16_t now);
 /**
  * @brief Advance both fixtures by 0.1 C per 500 ms, wrapping after +125 C.
  * @param[in] now Current 16-bit system tick.
- * @details Uses a tenths accumulator rounded to the nearest 1/16 C.
- * Disconnected devices advance too. Poll gaps must be less than a tick wrap;
- * late polls catch up elapsed steps and retain the fractional interval.
  * @retval eResultOk Sweep updated.
  * @retval eResultNotReady Sweep has not been started since sensors_init().
+ * @note Uses a tenths accumulator rounded to the nearest 1/16 C.
+ * Disconnected devices advance too. Poll gaps must be less than a tick wrap;
+ * late polls catch up elapsed steps and retain the fractional interval.
  */
 EResult_t sensors_fake_sweep_update(uint16_t now);
 /******************************************************************************/

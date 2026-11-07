@@ -26,6 +26,58 @@ GitHub Actions runs both checks for pull requests and pushes to `development`,
 `main`, or `master`, and stores the firmware images, map and `VERSION` as an
 artifact. Hardware behavior still requires testing on the board.
 
+#### Real DS18B20 (software 1-Wire)
+
+Connect a separately powered DS18B20: VDD to its supply, GND to common ground,
+and DQ to PD2 with an external pull-up. Parasite power is not supported.
+Keep heater loads disconnected for this interface-only bench stage;
+both firmware heater outputs remain off.
+
+```sh
+make -B all BUILD_DIR=output/real-sensor
+```
+
+Flash `output/real-sensor/boiler.hex`. This is the normal EEPROM-backed build,
+without fake sensors or the RAM test configuration. It does not erase the old
+assignments. A saved fake ROM will not match a real sensor: enter service with
+Left+Right held before reset/power-on and for 3 seconds after debounce.
+From E001, Enter also opens assignment.
+
+For the first single-sensor test:
+
+1. Release the startup keys at `P  1`, then Enter.
+2. Leave the one sensor connected at `S1`, then Enter.
+3. At `CONF`, Enter; at `SAVE`, Enter again to confirm writing EEPROM.
+4. Wait for automatic application and the temperature screen.
+
+Each real-bus check takes about one second; the prompt remains visible while
+it runs. Right has no action and no fixture-presence decimal points appear.
+On a failed check, Enter retries and Left cancels before writing begins.
+Normal temperature-screen buttons remain inactive.
+
+The backend ensures 12-bit resolution (0.0625 C) before conversion, with
+configuration readback and preserved alarm thresholds. It changes sensor
+RAM only, not sensor EEPROM. The display still rounds to tenths or whole
+degrees; higher sensor resolution does not add displayed decimal places.
+
+The initial display can show dashes until the first checked conversion.
+Temperature uses the previously verified adaptive format; HL7 indicates
+Mode 3 and HL4 is steady without an error. Verify temperature changes by
+gently warming the sensor, then verify power-cycle restoration. With valid
+assignments, disconnecting the sensor eventually shows E002; reconnecting
+restores temperature without a reset or another beep. E005 means failed
+ROM/scratchpad CRC. E008 indicates a bus/data/power/configuration/conversion
+failure.
+Check the external pull-up, wiring and supply if either persists.
+
+Occasional subtle display jitter is currently a known limitation of
+cooperative scanning during software 1-Wire transfers.
+
+For MPLAB, regenerate CMake to include the new source files and remove the
+fake/RAM-test macros (or set `SENSORS_USE_FAKE=0`, `CONFIG_USE_TEST=0`).
+The software 1-Wire backend is selected by default. Existing sensor assignment
+format and EEPROM addresses are unchanged.
+
 #### Sensor test build
 
 For a bench test with fake sensors and RAM-only configuration:
