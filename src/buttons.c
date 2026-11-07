@@ -1,7 +1,7 @@
 /**
  * @copyright @showdate "%Y " Anton Chernov. All rights reserved.
  * @file    buttons.c
- * @version 0.1.9
+ * @version 0.1.10
  * @authors Anton Chernov
  * @date    2026-11-05
  * @date    @showdate "%Y-%m-%d"
