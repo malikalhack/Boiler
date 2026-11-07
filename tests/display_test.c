@@ -214,7 +214,7 @@ static void test_temperatures(void) {
          raw <= 125 * SENSOR_TEMP_SCALE; raw++) {
         degrees = (double)raw / SENSOR_TEMP_SCALE;
         rounded = (int)(degrees * 10.0 + (raw < 0 ? -0.5 : 0.5));
-        if ((rounded >= -99) && (rounded <= 999)) {
+        if (rounded >= -99 && rounded <= 999) {
             snprintf(text, sizeof(text), "%.1f", rounded / 10.0);
         }
         else {
@@ -264,8 +264,7 @@ static void test_feedback(void) {
         tick = FEEDBACK_BLINK_TICKS + elapsed;
         feedback_update(NULL);
         expected.slots[DISPLAY_DIGITS] = frame.slots[DISPLAY_DIGITS];
-        if ((elapsed % FEEDBACK_BLINK_TICKS) <
-            FEEDBACK_BLINK_TICKS / 2U) {
+        if (elapsed % FEEDBACK_BLINK_TICKS < FEEDBACK_BLINK_TICKS / 2U) {
             expected.slots[DISPLAY_DIGITS] |= FEEDBACK_LED_MASK;
         }
         check_frame(expected);

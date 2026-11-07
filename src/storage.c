@@ -433,7 +433,7 @@ EResult_t storageSave(const SBoilerConfig_t *config) {
 
     if (!storage_initialized) {
         result = storageInit();
-        if ((result != eResultOk) && (result != eResultNoConfig)) {
+        if (result != eResultOk && result != eResultNoConfig) {
             return result;
         }
     }
@@ -460,10 +460,12 @@ EResult_t storageSave(const SBoilerConfig_t *config) {
         return result;
     }
 
-    if ((memcmp(record, verify, STORAGE_MARKER_OFFSET) != 0) ||
-        (boilerStorageCrc(verify, STORAGE_CRC_OFFSET) !=
-         (uint16_t)(((uint16_t)verify[STORAGE_CRC_OFFSET] << 8U) |
-                    verify[STORAGE_CRC_OFFSET + 1U]))) {
+    if (
+        memcmp(record, verify, STORAGE_MARKER_OFFSET) != 0 ||
+        boilerStorageCrc(verify, STORAGE_CRC_OFFSET) !=
+        (uint16_t)((uint16_t)verify[STORAGE_CRC_OFFSET] << 8U |
+                   verify[STORAGE_CRC_OFFSET + 1U])
+    ) {
         return eResultVerifyFailed;
     }
 
@@ -496,12 +498,12 @@ EResult_t storage_save_begin(const SBoilerConfig_t *config) {
     if (config == NULL) {
         return eResultInvalidArgument;
     }
-    if ((save_stage != eSaveIdle) || !bsp_eeprom_ready()) {
+    if (save_stage != eSaveIdle || !bsp_eeprom_ready()) {
         return eResultBusy;
     }
     if (!storage_initialized) {
         result = storageInit();
-        if ((result != eResultOk) && (result != eResultNoConfig)) {
+        if (result != eResultOk && result != eResultNoConfig) {
             return result;
         }
     }
@@ -548,8 +550,10 @@ EResult_t storage_save_poll(void) {
             break;
         case eSaveVerify:
             result = boilerStorageReadRecord(save_slot, verify);
-            if ((result == eResultOk) &&
-                (memcmp(save_record, verify, STORAGE_MARKER_OFFSET) != 0)) {
+            if (
+                result == eResultOk &&
+                memcmp(save_record, verify, STORAGE_MARKER_OFFSET) != 0
+            ) {
                 result = eResultVerifyFailed;
             }
             save_stage = eSaveCommit;
@@ -562,9 +566,11 @@ EResult_t storage_save_poll(void) {
             break;
         case eSaveFinish:
             result = boilerStorageReadRecord(save_slot, verify);
-            if ((result == eResultOk) &&
+            if (
+                result == eResultOk &&
                 (!boilerStorageRecordValid(verify) ||
-                 (memcmp(save_record, verify, STORAGE_RECORD_SIZE) != 0))) {
+                 memcmp(save_record, verify, STORAGE_RECORD_SIZE) != 0)
+            ) {
                 result = eResultVerifyFailed;
             }
             if (result == eResultOk) {
@@ -579,7 +585,7 @@ EResult_t storage_save_poll(void) {
             result = eResultNotReady;
             break;
     }
-    if ((result != eResultOk) || (save_stage == eSaveIdle)) {
+    if (result != eResultOk || save_stage == eSaveIdle) {
         save_result = result;
         save_stage = eSaveIdle;
     }

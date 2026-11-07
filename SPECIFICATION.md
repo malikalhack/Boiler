@@ -269,41 +269,9 @@ Before heating is enabled, verify:
 
 Any failure disables both heater outputs.
 
-### 3.1. Fake Sensor Backend
+### 3.1. DS18B20 Backend
 
-The explicit `SENSORS_USE_FAKE=1` build option enables an isolated test
-implementation; normal builds default to zero. It does not use GPIO, 1-Wire,
-EEPROM or heater outputs. Fake-enabled firmware initializes it at startup.
-
-The backend provides discovery and temperature reads addressed by complete
-ROM, with two fixed DS18B20-family ROMs containing valid Dallas CRC bytes.
-Fixture indices control simulation only and do not assign installation points.
-Initialization restores both devices as present, at 25 and 30 degrees Celsius.
-Test controls can independently disconnect either device and set signed
-temperatures in 1/16 degree units within the DS18B20 range (-55..125 C).
-
-Discovery succeeds with a count of zero on an empty simulated bus. Reads of
-absent or unknown ROMs return `eResultNotFound`, not a synthetic temperature.
-Uninitialized calls return `eResultNotReady`. Failed calls preserve outputs.
-The fake returns immediately and does not model conversion time, bus faults
-or scratchpad CRC failures. Real backends will require incremental conversion
-handling before they can replace it; fake readings never authorize heating.
-
-Fake-enabled firmware explicitly starts an automatic temperature sweep after
-backend initialization. Both fixtures start at -55.0 C, increase together by
-0.1 C every 500 ms through +125.0 C inclusive, then return to -55.0 C and
-repeat. A tenths accumulator is converted to the nearest 1/16 C reading;
-adding a rounded raw increment repeatedly is forbidden because it would drift.
-Each endpoint lasts one step interval; the complete 1801-sample cycle takes
-900.5 seconds. Disconnected fixtures advance too, and assignment/save/apply
-does not restart the sweep or change presence. Timing is non-blocking,
-handles tick wrap and retains elapsed partial intervals after a late poll.
-The low-level initialization and manual fixture controls remain available
-for deterministic tests without starting the sweep.
-
-### 3.2. Real DS18B20 Backend
-
-The default build (`SENSORS_USE_FAKE=0`) uses software 1-Wire. A task polled
+Firmware uses real sensors through software 1-Wire. A task polled
 each tick performs at most one reset, one byte, or one Search ROM triplet
 per invocation. Discovery handles ROM collisions and validates Dallas CRC-8,
 with a capacity of two devices; further branches produce E006.
@@ -338,8 +306,7 @@ An initial acquisition or explicit service refresh reports Busy, not a
 synthetic temperature or an application error. The initial display is
 dashes for a valid configuration until the first result; E001 still takes
 precedence for invalid assignments. After each result a 100 ms pause precedes
-the next scan; normal updates take approximately one second, rather than
-the fake backend's 500 ms sweep interval.
+the next scan; normal updates take approximately one second.
 
 Empty-bus discovery produces a zero-device snapshot and the assigned-sensor
 diagnostic E002/E003. Unknown ROMs produce E004 through the existing profile
@@ -464,11 +431,10 @@ procedure succeeds. If the procedure is interrupted, the previous valid
 configuration remains unchanged. If no previous configuration exists, the
 device remains in the error state.
 
-### 5.3. Four-Digit Service UI and Backend Controls
+### 5.3. Four-Digit Service UI
 
-The service is enabled with `CONFIG_USE_TEST=0` for both real and fake
-backends. Unlike the RAM configuration test mode, this service
-**writes EEPROM after explicit confirmation**. Heater outputs stay off.
+The service **writes EEPROM after explicit confirmation**.
+Heater outputs stay off.
 
 | Screen | Action |
 | --- | --- |
@@ -483,13 +449,7 @@ assignment immediately advances to the next prompt; S1OK/S2OK are conceptual
 states, not additional confirmation screens. At each assignment step exactly
 one suitable device must be present. Two-channel assignments must be distinct.
 
-In fake builds, Right cycles simulated presence:
-neither -> first -> second -> both -> neither.
-The first two digit decimal points indicate fixture presence, independently
-of assigned locations. Right never writes EEPROM or assigns a ROM by index.
-This is a test control, not a feature for the real sensor backend.
-
-For real sensors, Right has no action and fixture decimal points are off.
+Right has no action and presence decimal points are not displayed.
 Connect/disconnect physical sensors as prompted. Enter at S1/S2, CONF and
 SAVE requests a fresh complete acquisition, including conversion and CRC,
 before assigning, advancing or starting EEPROM writing. The prompt stays
@@ -497,7 +457,7 @@ visible while Busy; a measurement error remains retryable with Enter or
 cancellable with Left. Unsupported sensor families cannot be assigned.
 
 Left cancels any step before writing and restores the current diagnostic
-or temperature screen with no EEPROM change. Changing fake presence during
+or temperature screen with no EEPROM change. Changing physical connections
 service can produce a new ordinary diagnostic after cancellation, without
 changing the old assignments. Failed measurements/checks display their error;
 Enter retries the
@@ -514,9 +474,7 @@ do not overwrite service screens. Enter combined with another held button
 does not confirm a step. After application, the idle screen shows the assigned SENSOR_1 temperature
 with steady HL4 and HL7, or the current diagnostic if sensor presence has
 since changed.
-Applying the saved record does not reset simulated presence to its startup
-mask or restart the temperature sweep. Subsequent service initialization
-reads actual backend presence.
+Sensor acquisition continues throughout service and the application handoff.
 Diagnostics remain paused through the application handoff, so they cannot
 check an old assignment against the new service setup.
 
@@ -536,27 +494,6 @@ Required behavior:
 
 `E001` means: sensor configuration is missing or invalid. Dashes may be used
 as an intermediate display, but must not be the only indication of this state.
-
-### 6.1. RAM Configuration Test Mode
-
-`CONFIG_USE_TEST=1` requires `SENSORS_USE_FAKE=1`. It loads fixed fixture ROMs
-into RAM and bypasses EEPROM initialization, reads and writes entirely.
-`CONFIG_TEST_PROFILE` selects profile 1 or 2 (default 2).
-`SENSOR_FAKE_PRESENT_MASK` selects startup presence, bit 0 for the first
-fixture and bit 1 for the second (default 3). These are test controls only;
-locations are still matched using the full configured ROM.
-
-The fake-enabled firmware checks required devices at startup and every
-100 ms. E001 blocks sensor checks; a missing first device produces E002,
-a missing required second device produces E003. Missing assigned devices
-have priority over unassigned extras, which produce E004. If both devices
-are missing, E002 is displayed. Recovery restores the assigned SENSOR_1
-temperature and makes HL4 steady without repeating the startup beep.
-
-The normal build loads and validates EEPROM assignments and performs the
-real bus acquisition described in Section 3.2. No build at this stage enables
-heater outputs.
-The RAM test mode is not a persistent configuration or a sensor service menu.
 
 ## 7. Error Codes
 
@@ -649,7 +586,7 @@ valid configuration, the device returns to `CONFIG_INVALID`.
 ### User Interface Displays
 
 The current interface stage implements only Mode 3 temperature indication
-with real or fake sensors; no build enables heating. Both profiles show only the
+with real DS18B20 sensors; heating is disabled. Both profiles show only the
 ROM assigned to SENSOR_1, with no channel switching or channel marker.
 Existing profile-based diagnostics are retained: a two-channel assignment
 still requires both devices, and unknown extras remain errors.
@@ -705,9 +642,8 @@ channel 2, not a numeric channel label.
   a non-blocking cooperative handler. Left, Right and Enter do not repeat.
 - Raw release suspends repeats immediately, while its release event still
   requires debounce. Late polling does not generate bursts of missed repeats.
-- Real and fake builds with EEPROM configuration route button events to the
-  assignment menu. RAM configuration test builds retain state-only polling.
-  No button event enables heaters.
+- Button events are routed to the assignment menu. No button event enables
+  heaters.
 
 ## 9. AcroSched Constraints
 

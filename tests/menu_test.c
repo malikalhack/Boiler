@@ -14,6 +14,7 @@
 #include <string.h>
 
 #include "task_priorities.h"
+#include "sensor_stub.h"
 
 /**
  * @def main
@@ -73,7 +74,6 @@ static unsigned int failed_write;
 static bool corrupt_byte;
 static bool corrupt_commit;
 static bool read_failure;
-static uint8_t test_presence;
 static jmp_buf scheduler_exit;
 
 /********************** Application Programming Interface *********************/
@@ -150,8 +150,10 @@ EResult_t bspEepromUpdate(uint16_t address, const uint8_t *data, uint16_t size) 
     }
     pending_address = address;
     pending_byte = *data;
-    if (corrupt_byte ||
-        (corrupt_commit && pending_byte == TEST_COMMIT_MARKER)) {
+    if (corrupt_byte) {
+        pending_byte ^= 1U;
+    }
+    else if (corrupt_commit && pending_byte == TEST_COMMIT_MARKER) {
         pending_byte ^= 1U;
     }
     write_ticks = TEST_WRITE_TICKS;
@@ -176,7 +178,7 @@ EAcroStatus_t acroAddTask(
     assert(priority == task_priorities[descriptor]);
     assert((registered & (1U << descriptor)) == 0U);
     registered |= 1U << descriptor;
-    assert(period == (descriptor == eTaskSensors ? BOILER_TICK_HZ / 10U : 1U));
+    assert(period == 1U);
     if (descriptor == eTaskMenu) {
         assert(task == service_update);
     }
@@ -212,9 +214,7 @@ static void advance(uint16_t ticks) {
         previous = writes;
         feedback_update(NULL);
         buttons_poll(NULL);
-        if ((tick % (BOILER_TICK_HZ / 10U)) == 0U) {
-            check_sensors(NULL);
-        }
+        check_sensors(NULL);
         service_update(NULL);
         assert(writes <= previous + 1U);
     }
@@ -225,9 +225,6 @@ static void press(EButton_t button) {
     raw_buttons = button;
     buttons_poll(NULL);
     advance(BUTTON_DEBOUNCE_TICKS);
-    if (button == eButtonRight) {
-        test_presence = (test_presence + 1U) & 3U;
-    }
     raw_buttons = 0U;
     buttons_poll(NULL);
     advance(BUTTON_DEBOUNCE_TICKS);
@@ -238,11 +235,12 @@ static void boot_with_buttons(uint8_t buttons, AcroTick_t initial_tick) {
     tick = initial_tick;
     raw_buttons = buttons;
     registered = 0U;
-    test_presence = SENSOR_FAKE_PRESENT_MASK;
+    stub_presence = STUB_ALL_PRESENT;
     if (setjmp(scheduler_exit) == 0) {
         firmware_main();
         assert(false);
     }
+    check_sensors(NULL);
 }
 /*----------------------------------------------------------------------------*/
 
@@ -259,7 +257,6 @@ static void reset_board(void) {
     corrupt_byte = false;
     corrupt_commit = false;
     read_failure = false;
-    test_presence = SENSOR_FAKE_PRESENT_MASK;
     boot_board();
     assert(!config_loaded);
     assert(active_error == eErrorConfigInvalid);
@@ -275,8 +272,10 @@ static void check_frame(SDisplayFrame_t expected, uint8_t points) {
         display_scan(NULL);
         assert(selected == (1U << position));
         pattern = expected.slots[position];
-        if ((position < DISPLAY_DIGITS) &&
-            ((points & (1U << position)) != 0U)) {
+        if (
+            position < DISPLAY_DIGITS &&
+            (points & 1U << position) != 0U
+        ) {
             pattern |= eGlyphPoint;
         }
         assert(segments == pattern);
@@ -285,9 +284,9 @@ static void check_frame(SDisplayFrame_t expected, uint8_t points) {
 /*----------------------------------------------------------------------------*/
 
 static void select_presence(uint8_t mask) {
-    while (test_presence != mask) {
-        press(eButtonRight);
-    }
+    assert(mask <= STUB_ALL_PRESENT);
+    stub_presence = mask;
+    check_sensors(NULL);
 }
 /*----------------------------------------------------------------------------*/
 
@@ -302,7 +301,7 @@ static void check_error(EError_t error) {
     frame.slots[DISPLAY_DIGITS] =
         (tick % FEEDBACK_BLINK_TICKS) < FEEDBACK_BLINK_TICKS / 2U ?
         FEEDBACK_LED_MASK : 0U;
-    check_frame(frame, test_presence);
+    check_frame(frame, 0U);
 }
 /*----------------------------------------------------------------------------*/
 
@@ -310,7 +309,7 @@ static void check_prompt(SDisplayFrame_t frame) {
     frame.slots[DISPLAY_DIGITS] =
         (tick % FEEDBACK_BLINK_TICKS) < FEEDBACK_BLINK_TICKS / 2U ?
         FEEDBACK_LED_MASK : 0U;
-    check_frame(frame, test_presence);
+    check_frame(frame, 0U);
 }
 /*----------------------------------------------------------------------------*/
 
@@ -364,7 +363,7 @@ static void test_success(bool two) {
     SBoilerConfig_t config;
     SSensorRom_t rom;
     SDisplayFrame_t temperature = {
-        {eGlyphBlank, eGlyphDash, eGlyph5, eGlyph5,
+        {eGlyphBlank, eGlyph2, eGlyph5 | eGlyphPoint, eGlyph0,
          FEEDBACK_LED_MASK | DISPLAY_MODE3_LED_MASK}
     };
 
@@ -386,10 +385,10 @@ static void test_success(bool two) {
     assert(storageGet(&config) == eResultOk);
     assert(config_validate(&config) == eResultOk);
     assert(config.operating_profile == (two ? eProfileTwo : eProfileSingle));
-    assert(sensors_fake_get_rom(0U, &rom) == eResultOk);
+    rom = stub_roms[0];
     assert(memcmp(config.sensor_rom[0], rom.bytes, SENSOR_ROM_SIZE) == 0);
     if (two) {
-        assert(sensors_fake_get_rom(1U, &rom) == eResultOk);
+        rom = stub_roms[1];
         assert(memcmp(config.sensor_rom[1], rom.bytes, SENSOR_ROM_SIZE) == 0);
     }
     assert(config_loaded);
@@ -428,6 +427,9 @@ static void test_cancel_and_measurement_errors(void) {
     raw_buttons = 0U;
     buttons_poll(NULL);
     advance(BUTTON_DEBOUNCE_TICKS);
+    press(eButtonRight);
+    assert(menu_get_state() == eMenuProfile);
+    assert(stub_presence == STUB_ALL_PRESENT);
     press(eButtonEnter);
     press(eButtonEnter);
     assert(menu_get_state() == eMenuFailure);
@@ -525,8 +527,8 @@ static void test_save_failure_and_retry(void) {
     assert(config_loaded);
     assert(storageGet(&config) == eResultOk);
 
-    menu_init(eErrorConfigInvalid, 1U);
-    test_presence = 1U;
+    menu_init(eErrorConfigInvalid);
+    stub_presence = 1U;
     config_loaded = false;
     press(eButtonEnter);
     select_presence(2U);
@@ -609,12 +611,10 @@ static void test_single_fixture_application(uint8_t presence) {
     assert(config_loaded);
     assert(active_error == eErrorNone);
     assert(!buzzer);
-    assert(sensors_fake_get_presence(&actual_presence) == eResultOk);
+    actual_presence = stub_presence;
     assert(actual_presence == presence);
-    assert(sensors_fake_set_temperature(0U, 25 * SENSOR_TEMP_SCALE) ==
-           eResultOk);
-    assert(sensors_fake_set_temperature(1U, 30 * SENSOR_TEMP_SCALE) ==
-           eResultOk);
+    stub_temperatures[0] = 25 * SENSOR_TEMP_SCALE;
+    stub_temperatures[1] = 30 * SENSOR_TEMP_SCALE;
     check_sensors(NULL);
     check_frame((SDisplayFrame_t){{eGlyphBlank,
                                   presence == 1U ? eGlyph2 : eGlyph3,
@@ -624,12 +624,11 @@ static void test_single_fixture_application(uint8_t presence) {
                 0U);
     advance(2U * FEEDBACK_BLINK_TICKS);
     assert(active_error == eErrorNone);
-    assert(sensors_fake_get_presence(&actual_presence) == eResultOk);
+    actual_presence = stub_presence;
     assert(actual_presence == presence);
-    assert(menu_open(eErrorNone, actual_presence) == eResultOk);
-    check_frame((SDisplayFrame_t){{eGlyphP, eGlyphBlank,
-                                  eGlyphBlank, eGlyph1, FEEDBACK_LED_MASK}},
-                presence);
+    assert(menu_open(eErrorNone) == eResultOk);
+    check_frame((SDisplayFrame_t){{
+        eGlyphP, eGlyphBlank, eGlyphBlank, eGlyph1, FEEDBACK_LED_MASK}}, 0U);
     press(eButtonLeft);
     assert(menu_get_state() == eMenuIdle);
 }
@@ -653,10 +652,8 @@ static void test_temperature_controls_and_service(void) {
     boot_board();
     assert(storageGet(&before) == eResultOk);
     previous_writes = writes;
-    assert(sensors_fake_set_temperature(0U, 25 * SENSOR_TEMP_SCALE) ==
-           eResultOk);
-    assert(sensors_fake_set_temperature(1U, 30 * SENSOR_TEMP_SCALE) ==
-           eResultOk);
+    stub_temperatures[0] = 25 * SENSOR_TEMP_SCALE;
+    stub_temperatures[1] = 30 * SENSOR_TEMP_SCALE;
     check_sensors(NULL);
     check_frame(temperature, 0U);
     for (index = 0U; index < sizeof(buttons) / sizeof(buttons[0]); index++) {
@@ -667,32 +664,32 @@ static void test_temperature_controls_and_service(void) {
         buttons_poll(NULL);
         advance(BUTTON_DEBOUNCE_TICKS);
         assert(menu_get_state() == eMenuIdle);
-        assert(sensors_fake_get_presence(&presence) == eResultOk);
+        presence = stub_presence;
         assert(presence == 3U);
         check_frame(temperature, 0U);
         assert(writes == previous_writes);
     }
     assert(storageGet(&after) == eResultOk);
     assert(memcmp(&before, &after, sizeof(before)) == 0);
-    assert(menu_open(active_error, presence) == eResultOk);
-    check_prompt((SDisplayFrame_t){{eGlyphP, eGlyphBlank,
-                                   eGlyphBlank, eGlyph1, 0U}});
+    assert(menu_open(active_error) == eResultOk);
+    check_prompt((SDisplayFrame_t){
+        {eGlyphP, eGlyphBlank, eGlyphBlank, eGlyph1, 0U}});
     advance(1000U);
-    check_prompt((SDisplayFrame_t){{eGlyphP, eGlyphBlank,
-                                   eGlyphBlank, eGlyph1, 0U}});
+    check_prompt((SDisplayFrame_t){
+        {eGlyphP, eGlyphBlank, eGlyphBlank, eGlyph1, 0U}});
     press(eButtonLeft);
     assert(!menu_is_active());
     temperature = (SDisplayFrame_t){
-        {eGlyphBlank, eGlyphDash, eGlyph5, eGlyph5,
+        {eGlyphBlank, eGlyph2, eGlyph5 | eGlyphPoint, eGlyph0,
          FEEDBACK_LED_MASK | DISPLAY_MODE3_LED_MASK}
     };
     check_frame(temperature, 0U);
-    assert(sensors_fake_set_present(0U, false) == eResultOk);
+    stub_presence &= (uint8_t)~1U;
     check_sensors(NULL);
     check_frame((SDisplayFrame_t){{eGlyphE, eGlyph0, eGlyph0, eGlyph2,
                                   FEEDBACK_LED_MASK |
                                   DISPLAY_MODE3_LED_MASK}}, 0U);
-    assert(sensors_fake_set_present(0U, true) == eResultOk);
+    stub_presence |= 1U;
     check_sensors(NULL);
     check_frame(temperature, 0U);
     assert(!buzzer);
@@ -721,15 +718,14 @@ static void test_automatic_save_completion(void) {
         advance(BUTTON_DEBOUNCE_TICKS);
         assert(menu_get_state() == eMenuSaving);
         assert(!config_loaded);
-        assert(sensors_fake_set_present(0U, (mask & 1U) != 0U) == eResultOk);
-        assert(sensors_fake_set_present(1U, (mask & 2U) != 0U) == eResultOk);
+        stub_presence = mask;
         finish_save();
         assert(menu_get_state() == eMenuIdle);
         assert(config_loaded);
         assert(menu_get_result() == eResultOk);
         assert(active_error == ((mask & 1U) == 0U ? eErrorSensor1 :
                                 mask == 1U ? eErrorNone : eErrorUnknownSensor));
-        assert(sensors_fake_get_presence(&presence) == eResultOk);
+        presence = stub_presence;
         assert(presence == mask);
         previous_writes = writes;
         advance(BUTTON_HOLD_TICKS + BUTTON_REPEAT_TICKS);
@@ -881,14 +877,12 @@ static void test_startup_chord_from_missing_sensors(void) {
     test_success(true);
     for (mask = 0U; mask <= 1U; mask++) {
         boot_with_buttons(eButtonLeft | eButtonRight, 0U);
-        assert(sensors_fake_set_present(0U, mask != 0U) == eResultOk);
-        assert(sensors_fake_set_present(1U, false) == eResultOk);
-        test_presence = mask;
+        stub_presence = mask;
         check_sensors(NULL);
         assert(active_error == (mask == 0U ? eErrorSensor1 : eErrorSensor2));
         advance(BUTTON_DEBOUNCE_TICKS + MENU_STARTUP_HOLD_TICKS);
         assert(menu_get_state() == eMenuProfile);
-        assert(menu_open(active_error, mask) == eResultBusy);
+        assert(menu_open(active_error) == eResultBusy);
         release_buttons();
         press(eButtonLeft);
         assert(menu_get_state() == eMenuIdle);
@@ -899,7 +893,7 @@ static void test_startup_chord_from_missing_sensors(void) {
 
 static void test_reassignment_and_monitor_boundary(void) {
     SBoilerConfig_t config;
-    AcroTick_t interval = BOILER_TICK_HZ / 10U;
+    AcroTick_t interval = 1U;
     AcroTick_t wait;
     uint8_t presence;
     bool boundary_seen = false;
@@ -930,7 +924,7 @@ static void test_reassignment_and_monitor_boundary(void) {
         assert(menu_get_state() == eMenuIdle);
         assert(active_error == eErrorNone);
         assert(active_config.operating_profile == eProfileTwo);
-        assert(sensors_fake_get_presence(&presence) == eResultOk);
+        presence = stub_presence;
         assert(presence == 3U);
         advance(interval);
         assert(active_error == eErrorNone);

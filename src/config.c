@@ -15,9 +15,6 @@
 #include "config.h"
 #include "crc8.h"
 #include "sensors.h"
-#if (CONFIG_USE_TEST == 1)
-#include "sensors_fake.h"
-#endif /* CONFIG_USE_TEST */
 /********************************* Definitions ********************************/
 
 /**
@@ -46,13 +43,19 @@ EResult_t config_validate(const SBoilerConfig_t *config) {
     if (config == NULL) {
         return eResultInvalidArgument;
     }
-    if ((config->operating_profile == eProfileSingle) ||
-        (config->operating_profile == eProfileTwo)) {
+    if (
+        config->operating_profile == eProfileSingle ||
+        config->operating_profile == eProfileTwo
+    ) {
         if (rom_valid(config->sensor_rom[0])) {
-            if ((config->operating_profile == eProfileSingle) ||
-                (rom_valid(config->sensor_rom[1]) &&
-                 (memcmp(config->sensor_rom[0], config->sensor_rom[1],
-                         SENSOR_ROM_SIZE) != 0))) {
+            if (config->operating_profile == eProfileSingle) {
+                ret_val = eResultOk;
+            }
+            else if (
+                rom_valid(config->sensor_rom[1]) &&
+                memcmp(config->sensor_rom[0], config->sensor_rom[1],
+                       SENSOR_ROM_SIZE) != 0
+            ) {
                 ret_val = eResultOk;
             }
         }
@@ -64,27 +67,10 @@ EResult_t config_validate(const SBoilerConfig_t *config) {
 EResult_t config_load(SBoilerConfig_t *config) {
     SBoilerConfig_t candidate = {0};
     EResult_t result;
-#if (CONFIG_USE_TEST == 1)
-    SSensorRom_t rom;
-    uint8_t index;
-    uint8_t required;
-#endif /* CONFIG_USE_TEST */
 
     if (config == NULL) {
         return eResultInvalidArgument;
     }
-#if (CONFIG_USE_TEST == 1)
-    candidate.operating_profile = CONFIG_TEST_PROFILE;
-    required = CONFIG_TEST_PROFILE == eProfileSingle ?
-        1U : CONFIG_SENSOR_COUNT;
-    for (index = 0U; index < required; index++) {
-        result = sensors_fake_get_rom(index, &rom);
-        if (result != eResultOk) {
-            return result;
-        }
-        memcpy(candidate.sensor_rom[index], rom.bytes, SENSOR_ROM_SIZE);
-    }
-#else
     result = storageInit();
     if (result != eResultOk) {
         return result;
@@ -93,7 +79,6 @@ EResult_t config_load(SBoilerConfig_t *config) {
     if (result != eResultOk) {
         return result;
     }
-#endif /* CONFIG_USE_TEST */
     result = config_validate(&candidate);
     if (result == eResultOk) {
         *config = candidate;
@@ -115,7 +100,7 @@ EResult_t config_check_sensors(const SBoilerConfig_t *config, EError_t *error) {
     int16_t temperature;
     EResult_t result;
 
-    if ((config == NULL) || (error == NULL)) {
+    if (config == NULL || error == NULL) {
         return eResultInvalidArgument;
     }
     if (config_validate(config) != eResultOk) {
@@ -125,20 +110,21 @@ EResult_t config_check_sensors(const SBoilerConfig_t *config, EError_t *error) {
     required = config->operating_profile == eProfileSingle ?
         1U : CONFIG_SENSOR_COUNT;
     result = sensors_search(discovered, CONFIG_SENSOR_COUNT, &count);
-    if (result == eResultOutOfRange) {
-        *error = eErrorDeviceCount;
-        return eResultOk;
-    }
-    if (result != eResultOk) {
-#if (SENSORS_USE_FAKE == 0)
-        if ((result == eResultCrc) || (result == eResultBus) ||
-            (result == eResultPower) || (result == eResultTimeout) ||
-            (result == eResultVerifyFailed)) {
+    switch (result) {
+        case eResultOk:
+            break;
+        case eResultOutOfRange:
+            *error = eErrorDeviceCount;
+            return eResultOk;
+        case eResultCrc:
+        case eResultBus:
+        case eResultPower:
+        case eResultTimeout:
+        case eResultVerifyFailed:
             *error = sensors_error(result);
             return eResultOk;
-        }
-#endif
-        return result;
+        default:
+            return result;
     }
     for (index = 0U; index < count; index++) {
         matched = false;
@@ -154,7 +140,7 @@ EResult_t config_check_sensors(const SBoilerConfig_t *config, EError_t *error) {
     if (!found[0]) {
         *error = eErrorSensor1;
     }
-    else if ((required == CONFIG_SENSOR_COUNT) && !found[1]) {
+    else if (required == CONFIG_SENSOR_COUNT && !found[1]) {
         *error = eErrorSensor2;
     }
     else if (unknown) {

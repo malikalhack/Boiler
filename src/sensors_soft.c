@@ -9,7 +9,7 @@
 /******************************** Included files ******************************/
 #include "boiler_config.h"
 
-#if SENSORS_USE_FAKE == 0 && BOILER_USE_SOFT_1WIRE == 1
+#if BOILER_USE_SOFT_1WIRE == 1
 #include <stdbool.h>
 #include <string.h>
 
@@ -637,4 +637,4 @@ EResult_t sensors_read(SSensorRom_t rom, int16_t *temperature) {
     return ret_val;
 }
 /******************************************************************************/
-#endif /* SENSORS_USE_FAKE && BOILER_USE_SOFT_1WIRE */
+#endif /* BOILER_USE_SOFT_1WIRE */

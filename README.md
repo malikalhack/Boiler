@@ -21,6 +21,8 @@ Eight LEDs act as additional indication. The boiler is controlled using five but
 
 Build the AVR firmware with AVR-GCC and GNU Make using `make`.
 Run host tests with `make test` (requires a host C compiler, Python 3 and Git).
+Host-only API substitutes and a bit-level 1-Wire emulator exercise the firmware;
+neither is linked into the AVR image.
 
 GitHub Actions runs both checks for pull requests and pushes to `development`,
 `main`, or `master`, and stores the firmware images, map and `VERSION` as an
@@ -34,12 +36,12 @@ Keep heater loads disconnected for this interface-only bench stage;
 both firmware heater outputs remain off.
 
 ```sh
-make -B all BUILD_DIR=output/real-sensor
+make -B all
 ```
 
-Flash `output/real-sensor/boiler.hex`. This is the normal EEPROM-backed build,
-without fake sensors or the RAM test configuration. It does not erase the old
-assignments. A saved fake ROM will not match a real sensor: enter service with
+Flash `output/real-sensor/boiler.hex`. Firmware uses real sensors and
+EEPROM-backed assignments. It does not erase old records.
+To change assignments that do not match connected sensors, enter service with
 Left+Right held before reset/power-on and for 3 seconds after debounce.
 From E001, Enter also opens assignment.
 
@@ -51,7 +53,7 @@ For the first single-sensor test:
 4. Wait for automatic application and the temperature screen.
 
 Each real-bus check takes about one second; the prompt remains visible while
-it runs. Right has no action and no fixture-presence decimal points appear.
+it runs. Right has no action and no presence decimal points appear.
 On a failed check, Enter retries and Left cancels before writing begins.
 Normal temperature-screen buttons remain inactive.
 
@@ -73,65 +75,20 @@ Check the external pull-up, wiring and supply if either persists.
 Occasional subtle display jitter is currently a known limitation of
 cooperative scanning during software 1-Wire transfers.
 
-For MPLAB, regenerate CMake to include the new source files and remove the
-fake/RAM-test macros (or set `SENSORS_USE_FAKE=0`, `CONFIG_USE_TEST=0`).
-The software 1-Wire backend is selected by default. Existing sensor assignment
+For MPLAB, remove obsolete test-build compiler definitions and regenerate
+CMake to refresh the source list. Software 1-Wire is the implemented backend.
+Existing sensor assignment
 format and EEPROM addresses are unchanged.
 
-#### Sensor test build
+#### Sensor assignment menu
 
-For a bench test with fake sensors and RAM-only configuration:
-
-```sh
-make -B all BUILD_DIR=output/test-config FAKE_SENSORS=1 TEST_CONFIG=1 TEST_PROFILE=1 FAKE_PRESENT=1
-```
-
-Flash `output/test-config/boiler.hex`. EEPROM is not accessed by this test
-mode; heater outputs remain off. This single-channel build shows the
-temperature of the assigned SENSOR_1 in Mode 3, with HL7 (segment C) and HL4
-continuously on while no error is active.
-
-Both fake devices sweep together from -55 to +125 C, increasing by 0.1 C
-every 500 ms, then returning to -55 C and repeating. A full cycle takes
-about 15 minutes. The screen shows tenths within -9.9..99.9 C and rounded
-whole degrees outside that range. Leading zeros are blank; negative readings
-retain their minus sign. Ordinary buttons do not change readings or channels.
-
-For two-channel profile diagnostics, use `TEST_PROFILE=2` (the Make default):
-
-| `FAKE_PRESENT` | Simulated devices | Display |
-| --- | --- | --- |
-| 0 | Neither | E002 |
-| 1 | First only | E003 |
-| 2 | Second only | E002 |
-| 3 | Both | SENSOR_1 temperature, HL4 and HL7 continuously on |
-
-The single-channel profile requires only the first
-assigned ROM: `FAKE_PRESENT=1` succeeds; an extra second device gives E004.
-The two-channel profile still checks both assignments but shows only SENSOR_1
-at this stage; channel switching and heating are not implemented.
-The build without test options continues to use EEPROM, with E001 for
-missing or invalid assignments.
-
-For MPLAB, regenerate CMake after adding sources and set equivalent compiler
-macros: `SENSORS_USE_FAKE=1`, `CONFIG_USE_TEST=1`,
-`CONFIG_TEST_PROFILE=1`, `SENSOR_FAKE_PRESENT_MASK=1`.
-Remove the test macros to return to the normal build.
-
-#### Sensor assignment menu (fake sensors)
-
-```sh
-make -B all BUILD_DIR=output/menu-test FAKE_SENSORS=1 TEST_CONFIG=0
-```
-
-Flash `output/menu-test/boiler.hex`. With missing/invalid EEPROM configuration
-the display shows E001; press Enter to start. **This build writes EEPROM
-after confirmation at SAVE.** It does not enable heaters.
+With missing/invalid EEPROM configuration the display shows E001; press
+Enter to start. **The menu writes EEPROM after confirmation at SAVE.**
+It does not enable heaters.
 
 - `P  1` / `P  2`: Up/Down select the profile, Enter confirms.
 - `S1` / `S2`: Enter assigns the sole present device.
-- Right cycles fake presence: none, first, second, both. Decimal points in
-  digits 1 and 2 show which fixtures are present.
+- Right has no action; connect/disconnect physical sensors as prompted.
 - `CONF`: Enter checks all assigned devices.
 - `SAVE`: Enter confirms writing; after verification the configuration is
   applied automatically, without another confirmation or reset.
@@ -145,17 +102,13 @@ for 3 seconds after button debounce, until `P  1` appears. Release the keys
 before navigating. This gesture works only at startup; releasing early
 cancels it. Cancelling service preserves the old EEPROM configuration.
 
-For MPLAB, regenerate CMake and set `SENSORS_USE_FAKE=1`,
-`CONFIG_USE_TEST=0` (remove previous RAM-test macros). Presence defaults to both.
 Configuration saved by the menu is loaded from EEPROM on subsequent starts.
 After a successful save, or after cancelling with a valid old configuration,
 the firmware rechecks sensor presence and shows SENSOR_1 temperature or the
 current diagnostic. HL7 is off inside service and on again with a valid
-configuration outside service, including during sensor errors. The sweep
-continues during service; saving/applying does not restart it.
-Fake presence resets to the build's `FAKE_PRESENT` value at startup; use
-`FAKE_PRESENT=1` for a single-channel configuration assigned to the first
-fixture, otherwise the default second fixture is correctly reported as E004.
+configuration outside service, including during sensor errors.
+Two-channel assignments still check both devices but show only SENSOR_1 at
+this stage; channel switching and heating are not implemented.
 
 #### Version and pull requests
 

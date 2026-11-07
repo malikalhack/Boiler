@@ -90,7 +90,7 @@ EResult_t display_show_error(EError_t error) {
     SDisplayFrame_t frame;
 
     ret_val = eResultInvalidArgument;
-    if ((error >= eErrorConfigInvalid) && (error <= eErrorWatchdog)) {
+    if (error >= eErrorConfigInvalid && error <= eErrorWatchdog) {
         frame = pending_frame;
         frame.slots[0] = eGlyphE;
         code = (uint16_t)error;
@@ -115,8 +115,10 @@ EResult_t display_show_temperature(int16_t temperature) {
     bool negative = temperature < 0;
     bool fractional;
 
-    if ((temperature < -55 * SENSOR_TEMP_SCALE) ||
-        (temperature > 125 * SENSOR_TEMP_SCALE)) {
+    if (
+        temperature < -55 * SENSOR_TEMP_SCALE ||
+        temperature > 125 * SENSOR_TEMP_SCALE
+    ) {
         return eResultOutOfRange;
     }
     magnitude = negative ? (uint16_t)-temperature : (uint16_t)temperature;

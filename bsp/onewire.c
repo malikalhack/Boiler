@@ -10,7 +10,7 @@
 /******************************** Included files ******************************/
 #include "boiler_config.h"
 
-#if SENSORS_USE_FAKE == 0 && BOILER_USE_SOFT_1WIRE == 1
+#if BOILER_USE_SOFT_1WIRE == 1
 #include <avr/io.h>
 #include <util/atomic.h>
 #include <util/delay.h>
@@ -147,4 +147,4 @@ bool onewire_read_bit(void) {
     return value;
 }
 /******************************************************************************/
-#endif /* SENSORS_USE_FAKE && BOILER_USE_SOFT_1WIRE */
+#endif /* BOILER_USE_SOFT_1WIRE */

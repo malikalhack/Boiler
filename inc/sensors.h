@@ -78,9 +78,8 @@ static inline EError_t sensors_error(EResult_t result) {
 }
 
 /**
- * @brief Initialize the selected sensor backend.
- * @note The fake backend resets to two present devices at 25 and 30 C.
- * The real backend starts acquisition and verifies 12-bit RAM configuration.
+ * @brief Initialize DS18B20 acquisition through software 1-Wire.
+ * @note Starts acquisition and verifies 12-bit RAM configuration.
  */
 void sensors_init(void);
 
@@ -133,8 +132,7 @@ EResult_t sensors_search(SSensorRom_t *roms, uint8_t capacity, uint8_t *count);
  * @note Real reads use the last fully checked snapshot, never power-on
  * scratchpad data before a completed conversion. Real errors invalidate that
  * snapshot; refresh yields Busy until the next complete acquisition.
- * Output remains unchanged on failure. The fake returns immediately,
- * with no bus access or conversion delay. It does not authorize heating.
+ * Output remains unchanged on failure. It does not authorize heating.
  */
 EResult_t sensors_read(SSensorRom_t rom, int16_t *temperature);
 /******************************************************************************/

@@ -36,10 +36,10 @@ typedef enum EProfile {
 EResult_t config_validate(const SBoilerConfig_t *config);
 
 /**
- * @brief Load a validated configuration from EEPROM or explicit RAM test mode.
+ * @brief Load a validated configuration from EEPROM.
  * @param[out] config Destination, unchanged on failure.
  * @returns Validation or storage operation result.
- * @note Never writes EEPROM. CONFIG_USE_TEST bypasses all EEPROM calls.
+ * @note Never writes EEPROM.
  */
 EResult_t config_load(SBoilerConfig_t *config);
 

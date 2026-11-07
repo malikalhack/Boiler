@@ -10,7 +10,6 @@
 /******************************** Included files ******************************/
 #include "boiler_config.h"
 
-#if (CONFIG_USE_TEST == 0)
 #include <string.h>
 
 #include "acrosched_defs.h"
@@ -18,24 +17,12 @@
 #include "display.h"
 #include "menu.h"
 #include "sensors.h"
-#if (SENSORS_USE_FAKE == 1)
-#include "sensors_fake.h"
-#endif
-
-/********************************* Definitions ********************************/
-/**
- * @def MENU_PRESENCE_MASK
- * @brief Two fixture presence bits used by Right and decimal-point indication.
- */
-#define MENU_PRESENCE_MASK (3U)
-
 /****************************** Module variables ******************************/
 static EMenuState_t state;
 static EMenuState_t retry_state;
 static EError_t idle_error;
 static EError_t shown_error;
 static EResult_t last_result;
-static uint8_t presence_mask;
 static SBoilerConfig_t candidate;
 
 /***************************** Private prototypes *****************************/
@@ -80,13 +67,11 @@ static void render(void) {
             break;
         case eMenuFailure:
             IGNORE_RETURN(display_show_error(shown_error));
-            display_set_points(presence_mask);
             return;
         default:
             return;
     }
     display_set_digits(frame);
-    display_set_points(presence_mask);
 }
 /*----------------------------------------------------------------------------*/
 
@@ -179,24 +164,22 @@ static void verify(bool save) {
 /*----------------------------------------------------------------------------*/
 
 /********************** Application Programming Interface *********************/
-void menu_init(EError_t error, uint8_t presence) {
+
+void menu_init(EError_t error) {
     state = eMenuIdle;
     idle_error = error;
-    presence_mask = presence & MENU_PRESENCE_MASK;
     last_result = eResultOk;
 }
 /*----------------------------------------------------------------------------*/
 
-EResult_t menu_open(EError_t error, uint8_t presence) {
-    if ((error < eErrorNone) || (error > eErrorWatchdog) ||
-        (presence > MENU_PRESENCE_MASK)) {
+EResult_t menu_open(EError_t error) {
+    if (error < eErrorNone || error > eErrorWatchdog) {
         return eResultInvalidArgument;
     }
     if (state != eMenuIdle) {
         return eResultBusy;
     }
     idle_error = error;
-    presence_mask = presence;
     bspHeaterOff(eBspHeater1);
     bspHeaterOff(eBspHeater2);
     display_set_leds(DISPLAY_MODE3_LED_MASK, 0U);
@@ -210,26 +193,24 @@ EResult_t menu_open(EError_t error, uint8_t presence) {
 /*----------------------------------------------------------------------------*/
 
 void menu_on_button(EButton_t button, EButtonEvent_t event) {
-#if (SENSORS_USE_FAKE == 1)
-    uint8_t index;
-    EResult_t result;
-#endif
-
     if (
-        (state == eMenuSaving)  ||
-        (state == eMenuApplied) ||
-        (event == eButtonReleased)
+        state == eMenuSaving ||
+        state == eMenuApplied ||
+        event == eButtonReleased
     ) {
         return;
     }
     if (state == eMenuIdle) {
-        if ((button == eButtonEnter) && (event == eButtonPressed) &&
-            (idle_error == eErrorConfigInvalid)) {
-            IGNORE_RETURN(menu_open(idle_error, presence_mask));
+        if (
+            button == eButtonEnter &&
+            event == eButtonPressed &&
+            idle_error == eErrorConfigInvalid
+        ) {
+            IGNORE_RETURN(menu_open(idle_error));
         }
         return;
     }
-    if ((button == eButtonLeft) && (event == eButtonPressed)) {
+    if (button == eButtonLeft && event == eButtonPressed) {
         state = eMenuIdle;
         if (idle_error == eErrorNone) {
             display_show_dashes();
@@ -239,21 +220,6 @@ void menu_on_button(EButton_t button, EButtonEvent_t event) {
         }
         return;
     }
-#if (SENSORS_USE_FAKE == 1)
-    if ((button == eButtonRight) && (event == eButtonPressed)) {
-        presence_mask = (presence_mask + 1U) & MENU_PRESENCE_MASK;
-        for (index = 0U; index < SENSOR_FAKE_COUNT; index++) {
-            result = sensors_fake_set_present(
-                index, (presence_mask & (1U << index)) != 0U);
-            if (result != eResultOk) {
-                fail(state, eErrorSoft1Wire, result);
-                return;
-            }
-        }
-        render();
-        return;
-    }
-#endif
     if (state == eMenuProfile) {
         if (button == eButtonUp) {
             candidate.operating_profile = eProfileTwo;
@@ -262,7 +228,7 @@ void menu_on_button(EButton_t button, EButtonEvent_t event) {
             candidate.operating_profile = eProfileSingle;
         }
     }
-    if ((button == eButtonEnter) && (event == eButtonPressed)) {
+    if (button == eButtonEnter && event == eButtonPressed) {
         switch (state) {
             case eMenuProfile: state = eMenuSensor1; break;
             case eMenuSensor1: state = eMenuMeasure1; break;
@@ -272,13 +238,15 @@ void menu_on_button(EButton_t button, EButtonEvent_t event) {
             case eMenuFailure: state = retry_state; break;
             default: break;
         }
-#if (SENSORS_USE_FAKE == 0)
-        if ((state == eMenuMeasure1) || (state == eMenuMeasure2) ||
-            (state == eMenuVerify) || (state == eMenuPreSave)) {
+        if (
+            state == eMenuMeasure1 ||
+            state == eMenuMeasure2 ||
+            state == eMenuVerify   ||
+            state == eMenuPreSave
+        ) {
             sensors_refresh();
             last_result = eResultBusy;
         }
-#endif
     }
     render();
 }
@@ -322,4 +290,3 @@ EResult_t menu_get_result(void) {
     return last_result;
 }
 /******************************************************************************/
-#endif /* CONFIG_USE_TEST */

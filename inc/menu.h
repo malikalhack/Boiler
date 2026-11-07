@@ -47,30 +47,26 @@ typedef enum EMenuState {
 /**
  * @brief Reset the assignment menu with the current application diagnostic.
  * @param[in] error Application diagnostic; Enter entry requires E001.
- * @param[in] presence Initial fake presence mask, matching backend setup.
- * @note Available with either backend and CONFIG_USE_TEST=0.
- * Does not touch EEPROM, reset sensors or change the displayed idle screen.
+ * @note Does not touch EEPROM, reset sensors or change the idle screen.
  */
-void menu_init(EError_t error, uint8_t presence);
+void menu_init(EError_t error);
 
 /**
  * @brief Open service from a confirmed startup gesture at any diagnostic.
  * @param[in] error Application diagnostic to restore if service is cancelled.
- * @param[in] presence Current fake presence mask, not the startup default.
  * @retval eResultOk Profile selection opened and both heaters disabled.
  * @retval eResultBusy Service already owns the display.
- * @retval eResultInvalidArgument Invalid diagnostic or presence mask.
+ * @retval eResultInvalidArgument Invalid diagnostic.
  * @note Does not modify the active configuration or EEPROM.
  */
-EResult_t menu_open(EError_t error, uint8_t presence);
+EResult_t menu_open(EError_t error);
 
 /**
  * @brief Handle debounced buttons without performing EEPROM writes.
  * @param[in] button Event source.
  * @param[in] event Press, release or Up/Down repeat.
  * @note Enter advances/acknowledges; Up/Down select profile; Left cancels
- * before writing; Right cycles fake presence, shown by K1/K2 decimal points.
- * On real hardware Right is inactive and fixture points are not displayed;
+ * before writing; Right is inactive.
  * Enter requests a fresh cooperative bus acquisition before each check.
  * Once saving starts all keys are ignored until completion.
  */

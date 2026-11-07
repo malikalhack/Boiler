@@ -20,12 +20,7 @@
 #include "bsp.h"
 #include "tasks.h"
 #include "sensors.h"
-#if (SENSORS_USE_FAKE == 1)
-#include "sensors_fake.h"
-#endif /* SENSORS_USE_FAKE */
-#if (CONFIG_USE_TEST == 0)
 #include "menu.h"
-#endif /* CONFIG_USE_TEST */
 /********************************* Definitions ********************************/
 
 /**
@@ -63,7 +58,6 @@ static void check_sensors(void *context);
 /** @brief Render the active diagnostic or verified first-channel reading. */
 static void show_status(void);
 
-#if (CONFIG_USE_TEST == 0)
 /**
  * @brief Route button events to service while rejecting Enter chords.
  * @param[in] button Button producing the event.
@@ -81,24 +75,21 @@ static void service_update(void *context);
 static void check_startup_service(void);
 
 /**
- * @brief Initialize service with the current diagnostic and fixture presence.
+ * @brief Initialize service with the current application diagnostic.
  * @param[in] error Diagnostic used for service entry and cancellation.
  */
 static void init_menu(EError_t error);
-#endif /* CONFIG_USE_TEST */
 
 /****************************** Module variables ******************************/
 
 static SBoilerConfig_t active_config;
 static bool config_loaded;
 static EError_t active_error;
-#if (CONFIG_USE_TEST == 0)
 static bool startup_pending;
 static bool startup_holding;
 static bool service_active;
 static AcroTick_t startup_last_tick;
 static AcroTick_t startup_remaining;
-#endif /* CONFIG_USE_TEST */
 
 /********************** Application Programming Interface *********************/
 
@@ -116,13 +107,6 @@ int main(void) {
         error = eErrorConfigInvalid;
     }
     sensors_init();
-#if (SENSORS_USE_FAKE == 1)
-    CHECK_RESULT(sensors_fake_set_present(
-        0U, (SENSOR_FAKE_PRESENT_MASK & 1U) != 0U));
-    CHECK_RESULT(sensors_fake_set_present(
-        1U, (SENSOR_FAKE_PRESENT_MASK & 2U) != 0U));
-    CHECK_RESULT(sensors_fake_sweep_start(bsp_get_time()));
-#endif
     config_loaded = error == eErrorNone;
     if (config_loaded) {
         active_config = config;
@@ -132,9 +116,7 @@ int main(void) {
         }
     }
     active_error = error;
-#if (CONFIG_USE_TEST == 0)
     init_menu(error);
-#endif /* CONFIG_USE_TEST */
     show_status();
 
     CHECK_STATUS(acroInit(bspGetTick()));
@@ -150,20 +132,12 @@ int main(void) {
         TASK_PRIORITY_BUTTONS
     ));
     CHECK_STATUS(acroAddTask(
-        eTaskSensors, check_sensors, NULL, ePeriodic,
-#if (SENSORS_USE_FAKE == 1)
-        BOILER_TICK_HZ / 10U, TASK_PRIORITY_SENSORS
-#else
-        1U, TASK_PRIORITY_SENSORS
-#endif
+        eTaskSensors, check_sensors, NULL, ePeriodic, 1U, TASK_PRIORITY_SENSORS
     ));
-#if (CONFIG_USE_TEST == 0)
     CHECK_STATUS(acroAddTask(
         eTaskMenu, service_update, NULL, ePeriodic, 1U, TASK_PRIORITY_MENU
     ));
-#endif /* CONFIG_USE_TEST */
 
-#if (CONFIG_USE_TEST == 0)
     buttons_init(on_button);
     /* Other inputs may still be settling; check the exact chord later. */
     startup_pending = (bsp_get_buttons() & (eButtonLeft | eButtonRight)) ==
@@ -171,9 +145,6 @@ int main(void) {
     startup_holding = false;
     startup_last_tick = bsp_get_time();
     startup_remaining = BUTTON_DEBOUNCE_TICKS;
-#else
-    buttons_init(NULL);
-#endif /* CONFIG_USE_TEST */
     feedback_init(error != eErrorNone);
     bspStart();
     IGNORE_RETURN(acroRun());   /* should never return */
@@ -214,16 +185,10 @@ static void check_sensors(void *context) {
     EResult_t result;
 
     (void)context;
-#if (SENSORS_USE_FAKE == 1)
-    CHECK_RESULT(sensors_fake_sweep_update(bsp_get_time()));
-#else
     sensors_update(bsp_get_time());
-#endif
-#if (CONFIG_USE_TEST == 0)
     if (menu_is_active()) {
         return;
     }
-#endif /* CONFIG_USE_TEST */
     if (config_loaded) {
         result = config_check_sensors(&active_config, &error);
         if (result == eResultBusy) {
@@ -238,10 +203,13 @@ static void check_sensors(void *context) {
     }
 }
 /*----------------------------------------------------------------------------*/
-#if (CONFIG_USE_TEST == 0)
+
 static void on_button(EButton_t button, EButtonEvent_t event) {
-    if ((button == eButtonEnter) && (event == eButtonPressed) &&
-        (buttons_get_state() != eButtonEnter)) {
+    if (
+        button == eButtonEnter &&
+        event == eButtonPressed &&
+        buttons_get_state() != eButtonEnter
+    ) {
         return;
     }
     menu_on_button(button, event);
@@ -273,12 +241,7 @@ static void service_update(void *context) {
 /*----------------------------------------------------------------------------*/
 
 static void init_menu(EError_t error) {
-    uint8_t presence = 0U;
-
-#if (SENSORS_USE_FAKE == 1)
-    CHECK_RESULT(sensors_fake_get_presence(&presence));
-#endif
-    menu_init(error, presence);
+    menu_init(error);
     service_active = false;
 }
 /*----------------------------------------------------------------------------*/
@@ -286,7 +249,6 @@ static void init_menu(EError_t error) {
 static void check_startup_service(void) {
     AcroTick_t now;
     AcroTick_t elapsed;
-    uint8_t presence = 0U;
     uint8_t buttons;
     const uint8_t chord = eButtonLeft | eButtonRight;
 
@@ -332,14 +294,10 @@ static void check_startup_service(void) {
     }
     else {
         startup_pending = false;
-#if (SENSORS_USE_FAKE == 1)
-        CHECK_RESULT(sensors_fake_get_presence(&presence));
-#endif
-        CHECK_RESULT(menu_open(active_error, presence));
+        CHECK_RESULT(menu_open(active_error));
     }
 }
 /*----------------------------------------------------------------------------*/
-#endif /* CONFIG_USE_TEST */
 
 _Noreturn static void error_handler(void) {
     bsp_buzzer_set(false);

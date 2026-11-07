@@ -54,14 +54,14 @@ EResult_t bspEepromRead(uint16_t address, uint8_t *data, uint16_t size) {
 
     read_count++;
     ret_val = eResultInvalidArgument;
-    if ((data == NULL) || (size == 0U)) {
+    if (data == NULL || size == 0U) {
         return ret_val;
     }
     if ((uint32_t)address + size > capacity) {
         return eResultOutOfRange;
     }
     ret_val = eResultReadFailed;
-    if (!read_failure && (read_count != failed_read)) {
+    if (!read_failure && read_count != failed_read) {
         memcpy(data, &eeprom_data[address], size);
         ret_val = eResultOk;
     }
@@ -74,7 +74,7 @@ EResult_t bspEepromUpdate(uint16_t address, const uint8_t *data, uint16_t size) 
 
     update_count++;
     ret_val = eResultInvalidArgument;
-    if ((data == NULL) || (size == 0U)) {
+    if (data == NULL || size == 0U) {
         return ret_val;
     }
     if ((uint32_t)address + size > capacity) {
@@ -83,10 +83,10 @@ EResult_t bspEepromUpdate(uint16_t address, const uint8_t *data, uint16_t size) 
     ret_val = eResultWriteFailed;
     if (update_count != failed_update) {
         memcpy(&eeprom_data[address], data, size);
-        if (corrupt_write && (size > 1U)) {
+        if (corrupt_write && size > 1U) {
             eeprom_data[address] ^= 1U;
         }
-        if (corrupt_commit && (update_count == TEST_SAVE_WRITES)) {
+        if (corrupt_commit && update_count == TEST_SAVE_WRITES) {
             eeprom_data[address] ^= 1U;
         }
         ret_val = eResultOk;

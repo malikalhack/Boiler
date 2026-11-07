@@ -727,3 +727,49 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
   Priority validation is retained; firmware priorities are not changed.
 - `make test` passed all C suites, all eight RAM startup profile/presence
   combinations and all 26 Python tests. Git branches were not changed.
+
+### Removing the temporary sensor backend
+
+- Removed the firmware's temporary sensor backend and its public controls:
+  `src/sensors_fake.c`, `inc/sensors_fake.h`, fixed readings, automatic sweep
+  and simulated disconnection support. With the user's confirmation, also
+  removed the dependent RAM configuration mode and fixed assignment ROMs.
+  Firmware now always loads EEPROM assignments and uses real software 1-Wire.
+- Removed the obsolete build variables and compiler definitions:
+  `FAKE_SENSORS`, `FAKE_PRESENT`, `TEST_CONFIG`, `TEST_PROFILE`,
+  `SENSORS_USE_FAKE`, `SENSOR_FAKE_PRESENT_MASK`, `CONFIG_USE_TEST` and
+  `CONFIG_TEST_PROFILE`. Removed their branches from startup, diagnostics
+  and service; acquisition is polled every tick.
+- Removed fixture-presence state and arguments from `menu_init`/`menu_open`,
+  the Right-button simulation and presence decimal points. Real service
+  behavior is retained: startup Left+Right, Enter from E001, physical sensor
+  assignment, fresh acquisitions, cancellation and automatic application
+  after verified SAVE. Right remains inactive.
+- Removed suites specific to the deleted backend and RAM mode. Configuration
+  and EEPROM/menu unit tests retain their coverage using a shared host-only
+  sensor API substitute in `tests/sensor_stub.c`/`.h`, with explicit test
+  connections and readings. It models Busy until the next test poll and is
+  never part of AVR or MPLAB source sets. The separate bit-level emulator
+  still executes the real driver, including discovery, CRC, resolution,
+  conversion timing, temperature range and firmware integration.
+- Updated menu unit tests for 1 ms polling and fixed readings without a sweep.
+  Preserved EEPROM write/readback fault injection, old-record protection,
+  startup hold/debounce boundaries and reassignment handoff checks.
+  Added a Right-inactive assertion without replacing the held-Enter test.
+- Updated README and specification to describe only the supported firmware
+  and physical assignment procedure. MPLAB source globs already exclude
+  tests; regenerate its source list after removing modules.
+  Historical entries above intentionally retain the earlier test stages.
+- Verification: `make test` passed all remaining C suites and 26 Python
+  tests. Menu/EEPROM and real 1-Wire suites also passed ASan/UBSan.
+  Doxygen documented-parameter/syntax, whitespace and source-width checks
+  passed. No obsolete backend or RAM-mode references remain in active code,
+  build configuration or current user/specification documentation.
+- `make -B all` and `make -B all BUILD_DIR=output/real-sensor` passed
+  (9804 bytes Flash / 476 bytes static RAM); their HEX images match.
+  The linked image contains real 1-Wire and neither test substitutes nor
+  heater-on code. The physical 1-Wire object remains byte-identical:
+  timing, display scheduling and heater safety were not changed.
+  EEPROM format and assignments are preserved. No branch change or commit
+  was made during this cleanup.
+

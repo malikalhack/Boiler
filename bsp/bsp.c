@@ -246,7 +246,7 @@ EResult_t bspEepromRead(uint16_t address, uint8_t *data, uint16_t size) {
     EResult_t ret_val;
 
     ret_val = eResultInvalidArgument;
-    if ((data != NULL) && (size != 0U)) {
+    if (data != NULL && size != 0U) {
         ret_val = eResultOutOfRange;
         if (bspEepromRangeValid(address, size)) {
             eeprom_read_block(data, (const void *)(uintptr_t)address, size);
@@ -262,7 +262,7 @@ EResult_t bspEepromUpdate(uint16_t address, const uint8_t *data, uint16_t size) 
     EResult_t ret_val;
 
     ret_val = eResultInvalidArgument;
-    if ((data != NULL) && (size != 0U)) {
+    if (data != NULL && size != 0U) {
         ret_val = eResultOutOfRange;
         if (bspEepromRangeValid(address, size)) {
             eeprom_update_block(data, (void *)(uintptr_t)address, size);

@@ -14,7 +14,7 @@
 
 #include "boiler_config.h"
 #include "config.h"
-#include "sensors_fake.h"
+#include "sensor_stub.h"
 /****************************** Module variables ******************************/
 
 static SBoilerConfig_t stored;
@@ -42,13 +42,12 @@ EResult_t storageGet(SBoilerConfig_t *config) {
 
 static SBoilerConfig_t fixture_config(void) {
     SBoilerConfig_t config = {0};
-    SSensorRom_t rom;
     uint8_t index;
 
     config.operating_profile = eProfileTwo;
-    for (index = 0U; index < SENSOR_FAKE_COUNT; index++) {
-        assert(sensors_fake_get_rom(index, &rom) == eResultOk);
-        memcpy(config.sensor_rom[index], rom.bytes, SENSOR_ROM_SIZE);
+    for (index = 0U; index < SENSOR_CAPACITY; index++) {
+        memcpy(config.sensor_rom[index], stub_roms[index].bytes,
+               SENSOR_ROM_SIZE);
     }
     return config;
 }
@@ -96,12 +95,6 @@ static void test_loading(void) {
     output = sentinel;
     assert(config_load(NULL) == eResultInvalidArgument);
     assert(storage_calls == 0U);
-#if (CONFIG_USE_TEST == 1)
-    assert(config_load(&output) == eResultOk);
-    assert(storage_calls == 0U);
-    assert(output.operating_profile == CONFIG_TEST_PROFILE);
-    assert(config_validate(&output) == eResultOk);
-#else
     init_result = eResultReadFailed;
     assert(config_load(&output) == eResultReadFailed);
     assert(storage_calls == 1U);
@@ -117,7 +110,6 @@ static void test_loading(void) {
     stored = fixture_config();
     assert(config_load(&output) == eResultOk);
     assert(memcmp(&output, &stored, sizeof(output)) == 0);
-#endif /* CONFIG_USE_TEST */
 }
 /*----------------------------------------------------------------------------*/
 
@@ -143,26 +135,28 @@ static void test_diagnostics(void) {
     swapped = (SBoilerConfig_t){0};
     check_diagnostic(swapped, eErrorConfigInvalid);
     sensors_init();
-    for (mask = 0U; mask < (1U << SENSOR_FAKE_COUNT); mask++) {
-        assert(sensors_fake_set_present(0U, (mask & 1U) != 0U) == eResultOk);
-        assert(sensors_fake_set_present(1U, (mask & 2U) != 0U) == eResultOk);
+    assert(config_check_sensors(&config, &error) == eResultBusy);
+    assert(error == eErrorWatchdog);
+    sensors_update(0U);
+    for (mask = 0U; mask <= STUB_ALL_PRESENT; mask++) {
+        stub_presence = mask;
         check_diagnostic(config, (mask & 1U) == 0U ? eErrorSensor1 :
                          (mask & 2U) == 0U ? eErrorSensor2 : eErrorNone);
     }
     swapped = config;
     memcpy(swapped.sensor_rom[0], config.sensor_rom[1], SENSOR_ROM_SIZE);
     memcpy(swapped.sensor_rom[1], config.sensor_rom[0], SENSOR_ROM_SIZE);
-    assert(sensors_fake_set_present(0U, false) == eResultOk);
+    stub_presence = 2U;
     check_diagnostic(swapped, eErrorSensor2);
-    assert(sensors_fake_set_present(0U, true) == eResultOk);
-    assert(sensors_fake_set_present(1U, false) == eResultOk);
+    stub_presence = 1U;
     check_diagnostic(swapped, eErrorSensor1);
     config.operating_profile = eProfileSingle;
     memset(config.sensor_rom[1], 0, SENSOR_ROM_SIZE);
     check_diagnostic(config, eErrorNone);
-    assert(sensors_fake_set_present(1U, true) == eResultOk);
+    stub_presence = STUB_ALL_PRESENT;
     check_diagnostic(config, eErrorUnknownSensor);
     sensors_init();
+    sensors_update(0U);
     config = fixture_config();
     check_diagnostic(config, eErrorNone);
 }

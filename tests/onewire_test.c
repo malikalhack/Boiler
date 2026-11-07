@@ -205,7 +205,7 @@ static void receive_byte(uint8_t value) {
                 output_bit = 0U;
                 memset(output, 0xFF, sizeof(output));
                 for (index = 0U; index < TEST_DEVICES; index++) {
-                    if ((selected_devices & presence & (1U << index)) != 0U) {
+                    if ((selected_devices & presence & 1U << index) != 0U) {
                         raw = conversions == 0U ?
                             85U * SENSOR_TEMP_SCALE : (uint16_t)values[index];
                         output[0] = raw & 0xFFU;
@@ -217,10 +217,10 @@ static void receive_byte(uint8_t value) {
                         output[6] = 0x0CU;
                         output[7] = 0x10U;
                         output[8] = crc8(output, 8U);
-                        if (
-                            ((bad_crc & (1U << index)) != 0U) ||
-                            (corrupt_setup_crc && setup_writes != 0U)
-                        ) {
+                        if ((bad_crc & 1U << index) != 0U) {
+                            output[8] ^= 1U;
+                        }
+                        else if (corrupt_setup_crc && setup_writes != 0U) {
                             output[8] ^= 1U;
                         }
                     }
@@ -237,7 +237,7 @@ static void receive_byte(uint8_t value) {
                 for (index = 0U; index < TEST_DEVICES; index++) {
                     if (
                         !ignore_setup &&
-                        ((selected_devices & presence & (1U << index)) != 0U)
+                        (selected_devices & presence & 1U << index) != 0U
                     ) {
                         alarms[index][0] = setup_bytes[0] ^
                                           (corrupt_alarm ? 1U : 0U);
@@ -707,7 +707,7 @@ static void test_firmware(void) {
     assert(menu_get_state() == eMenuIdle && active_error == eErrorNone);
     assert(writes == previous_writes);
     /* A failed check is retryable without changing EEPROM. */
-    assert(menu_open(active_error, 0U) == eResultOk);
+    assert(menu_open(active_error) == eResultOk);
     press(eButtonEnter);
     bad_crc = 1U;
     press(eButtonEnter);
@@ -723,7 +723,7 @@ static void test_firmware(void) {
     assert(active_error == eErrorNone && writes == previous_writes);
     fixtures[1].bytes[0] = 0x10U;
     fixtures[1].bytes[7] = crc8(fixtures[1].bytes, 7U);
-    assert(menu_open(active_error, 0U) == eResultOk);
+    assert(menu_open(active_error) == eResultOk);
     press(eButtonEnter);
     presence = 2U;
     press(eButtonEnter);
@@ -799,7 +799,7 @@ bool onewire_read_bit(void) {
         case eBusSearch:
             assert(search_position < 64U && search_read < 2U);
             for (index = 0U; index < TEST_DEVICES; index++) {
-                if (!lost_search && (candidates & (1U << index)) != 0U) {
+                if (!lost_search && (candidates & 1U << index) != 0U) {
                     bit = (fixtures[index].bytes[search_position / 8U] &
                            (1U << (search_position % 8U))) != 0U;
                     value &= search_read == 0U ? bit : !bit;
@@ -862,7 +862,7 @@ void bsp_display_write(uint8_t data, uint8_t mask) {
     uint8_t index;
 
     for (index = 0U; index < DISPLAY_SLOTS; index++) {
-        if (mask == (1U << index)) {
+        if (mask == 1U << index) {
             frame_slots[index] = data;
         }
     }

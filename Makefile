@@ -5,10 +5,6 @@ SRC_DIR     := src
 BSP_DIR     := bsp
 INC_DIR     := inc
 OPT_FLAGS   ?= -Os
-FAKE_SENSORS ?= 0
-TEST_CONFIG  ?= 0
-TEST_PROFILE ?= 2
-FAKE_PRESENT ?= 3
 
 CC          := avr-gcc
 OBJCOPY     := avr-objcopy
@@ -19,10 +15,6 @@ PYTHON      ?= python3
 CFLAGS      := -std=c11 -Wall -Wextra -Werror -mmcu=$(MCU) \
 			   -I$(INC_DIR) -Ilib -I$(BSP_DIR) \
 			   -include $(INC_DIR)/boiler_config.h $(OPT_FLAGS) \
-			   -DSENSORS_USE_FAKE=$(FAKE_SENSORS) \
-			   -DCONFIG_USE_TEST=$(TEST_CONFIG) \
-			   -DCONFIG_TEST_PROFILE=$(TEST_PROFILE) \
-			   -DSENSOR_FAKE_PRESENT_MASK=$(FAKE_PRESENT) \
 			   -ffunction-sections -fdata-sections
 LDFLAGS     := -mmcu=$(MCU) -Wl,-Map=$(BUILD_DIR)/$(TARGET).map \
 			   -Wl,--gc-sections
@@ -33,7 +25,6 @@ SOURCES     := $(SRC_DIR)/main.c $(SRC_DIR)/storage.c \
 			   $(SRC_DIR)/display.c \
 			   $(SRC_DIR)/feedback.c \
 			   $(SRC_DIR)/buttons.c \
-			   $(SRC_DIR)/sensors_fake.c \
 			   $(SRC_DIR)/sensors_soft.c \
 			   $(SRC_DIR)/menu.c \
 			   $(BSP_DIR)/onewire.c \
@@ -85,36 +76,13 @@ test:
 		-o $(BUILD_DIR)/tests/buttons_test
 	$(BUILD_DIR)/tests/buttons_test
 	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -I$(INC_DIR) \
-		-DSENSORS_USE_FAKE=1 tests/sensors_test.c $(SRC_DIR)/sensors_fake.c \
-		-o $(BUILD_DIR)/tests/sensors_test
-	$(BUILD_DIR)/tests/sensors_test
-	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -I$(INC_DIR) -DSENSORS_USE_FAKE=1 \
-		tests/config_test.c $(SRC_DIR)/config.c $(SRC_DIR)/sensors_fake.c \
+		tests/config_test.c $(SRC_DIR)/config.c tests/sensor_stub.c \
 		-o $(BUILD_DIR)/tests/config_test
 	$(BUILD_DIR)/tests/config_test
-	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -I$(INC_DIR) \
-		-DSENSORS_USE_FAKE=1 -DCONFIG_USE_TEST=1 \
-		tests/config_test.c $(SRC_DIR)/config.c $(SRC_DIR)/sensors_fake.c \
-		-o $(BUILD_DIR)/tests/config_ram_test
-	$(BUILD_DIR)/tests/config_ram_test
-	for profile in 1 2; do \
-		for mask in 0 1 2 3; do \
-			$(HOST_CC) -std=c11 -Wall -Wextra -Werror \
-				-Itests/stubs -I$(INC_DIR) -Ilib -I$(BSP_DIR) \
-				-DSENSORS_USE_FAKE=1 -DCONFIG_USE_TEST=1 \
-				-DCONFIG_TEST_PROFILE=$$profile \
-				-DSENSOR_FAKE_PRESENT_MASK=$$mask \
-				tests/config_startup_test.c $(SRC_DIR)/config.c \
-				$(SRC_DIR)/sensors_fake.c $(SRC_DIR)/display.c \
-				$(SRC_DIR)/feedback.c $(SRC_DIR)/buttons.c \
-				-o $(BUILD_DIR)/tests/config_startup_test && \
-				$(BUILD_DIR)/tests/config_startup_test || exit 1; \
-		done; \
-	done
 	$(HOST_CC) -std=c11 -Wall -Wextra -Werror \
-		-Itests/stubs -I$(INC_DIR) -Ilib -I$(BSP_DIR) -DSENSORS_USE_FAKE=1 \
+		-Itests/stubs -I$(INC_DIR) -Ilib -I$(BSP_DIR) \
 		tests/menu_test.c $(SRC_DIR)/menu.c $(SRC_DIR)/storage.c \
-		$(SRC_DIR)/config.c $(SRC_DIR)/sensors_fake.c $(SRC_DIR)/display.c \
+		$(SRC_DIR)/config.c tests/sensor_stub.c $(SRC_DIR)/display.c \
 		$(SRC_DIR)/feedback.c $(SRC_DIR)/buttons.c \
 		-o $(BUILD_DIR)/tests/menu_test
 	$(BUILD_DIR)/tests/menu_test
