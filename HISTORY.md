@@ -940,7 +940,7 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
   objects are byte-identical to the first stage; the linked image retains
   strong Timer0/Timer1 handlers and contains no heater-on symbol.
 
-### Required version-bump token under repository rules
+Пос### Required version-bump token under repository rules
 
 - The automatic version push was rejected by repository rules requiring a
   pull request and verified commit signatures. Changed checkout from an
@@ -957,6 +957,21 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
 - Verification: `python3 -m unittest discover -s tests -p 'version_workflow_test.py'`
   passed all 15 tests; `git diff --check` passed. The updated workflow still
   needs a GitHub run after pushing these changes.
+
+### Verified mixed driver retained; short-wait removal deferred
+
+- Board testing confirmed sensor operation, temperature display and LED
+  indication after the second mixed stage. Small display jitter remains
+  acceptable; no quantified improvement is claimed.
+- Retained the working timer/software driver, including the 6 us Write 1
+  pulse and 3+8 us read-sample delays. Removing those waits and redesigning
+  the fast interrupt paths are deferred while other project work proceeds.
+  The fully event-driven approach may be revisited later, with a verified
+  interrupt-latency budget and physical timing measurements.
+- Both Actions workflows completed successfully after configuring version
+  authentication. The version commit remains attributed to the bot; push
+  authentication and commit authorship are separate.
+- No firmware or timer changes were made for this decision.
 
 ### Documentation voice
 
