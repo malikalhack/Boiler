@@ -84,10 +84,11 @@ static inline EError_t sensors_error(EResult_t result) {
 void sensors_init(void);
 
 /**
- * @brief Advance the real backend by one reset, byte or search triplet.
+ * @brief Advance acquisition by one Reset poll, byte or search triplet.
  * @param[in] now Current 1 ms system tick; poll once per tick.
  * @note Call sensors_init() before polling or registering the polling task.
- * Conversion waits are non-blocking. Poll gaps must be shorter than one
+ * Reset and conversion waits are non-blocking; pending Reset sends no bits.
+ * Timer0 interrupts must run. Poll gaps must be shorter than one
  * 16-bit tick wrap. Available for the real software 1-Wire backend only.
  */
 void sensors_update(uint16_t now);

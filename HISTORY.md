@@ -829,6 +829,64 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
   linked. EEPROM, bus timing and scheduler priorities are unchanged.
   No branch change or commit was made.
 
+### First mixed timer/software 1-Wire stage
+
+- Assigned dedicated Timer0 to Reset's long waits, leaving Timer1's system
+  tick and scheduler-owned display scanning unchanged. Timer0 uses CTC and
+  /64 (approximately 4.34 us per counter step); OC0 is not connected to GPIO.
+  The shared Timer0/Timer1 prescaler is not reset. Compare thresholds 112
+  and 96 round up and include a guard step so the unknown prescaler phase
+  cannot shorten the 480 us Reset low or 410 us recovery minimum.
+- Changed `onewire_reset` to start/poll with Busy. The first timer interrupt
+  releases PD2 and retains the verified 70 us software presence wait; the
+  second checks recovery, stops Timer0 and leaves the result for polling.
+  Reset deadlines do not depend on another millisecond task invocation.
+  Repeated polling does not restart the timer; a result is consumed once.
+  Initialization cancels pending Reset and clears only Timer0 flags/enables.
+- Discovery, addressed selection and broadcast conversion now retain their
+  Reset state on Busy, without sending premature bits or publishing errors.
+  Refresh during a pending Reset restarts acquisition state but lets that
+  Reset finish; reinitialization cancels it. Other bus errors, coherent-cache
+  publication, 12-bit setup and acquisition diagnostics are preserved.
+- Added a host register/clock test executing the production timer driver.
+  Checked all 64 initial shared-prescaler phases against the actual minimum
+  waits, no foreground software delay, polling without counter restart,
+  presence/absence, idle/recovery faults, cancellation, interrupt-state
+  restoration, delayed result consumption and progress without polling.
+  GPIO ownership, Timer1 registers and prescaler state are also checked.
+- Made the separate bit-level emulator return Reset Busy for two ticks.
+  It rejects bit traffic while Reset is pending. Added acquisition-refresh,
+  reinitialization and tick-wrap checks, retaining discovery, conversion,
+  full temperature range, CRC/setup faults and real-firmware service coverage.
+  Test-only AVR register, interrupt, delay and atomic models remain excluded
+  from AVR/MPLAB firmware source sets.
+- Verification: `make test` passed seven C suites and 26 Python tests.
+  Timer0 and real-firmware tests passed ASan/UBSan with non-PIE host binaries.
+  Doxygen syntax/parameter, whitespace and 85-column source checks passed.
+  `make -B all` passed (10098 bytes Flash / 482 bytes static RAM).
+  Generated bit-write/read code, display and main BSP objects are unchanged.
+  Inspected the timer ISR: its presence path occupies about 75 us including
+  entry/exit overhead. Byte transfers still occupy about 560 us in a task;
+  this is not a fully asynchronous bit/byte implementation.
+- Updated API, specification and bench guidance. This stage still needs
+  board verification of acquisition and the effect on display jitter.
+  Heating remains disabled; EEPROM layout and scheduler priorities are
+  unchanged. No branch change or commit was made.
+
+### Timer0 test and stub style
+
+- Applied the project C style to the host AVR register, interrupt, atomic
+  and delay headers: section banners, function separators, closing comments
+  and documented declarations. Modeled AVR bit names remain platform macros
+  rather than members of a project-defined enumeration.
+- Replaced unexplained timer-test values with documented constants for
+  independent timing expectations, register sentinels and observation windows.
+  Documented the test entry point and removed a nested result-selection
+  expression. Preserved the hardware model, timing bounds and test coverage;
+  production firmware is unchanged.
+- Verification: `make test` passed seven C suites and 26 Python tests.
+  Doxygen syntax/parameter, whitespace, UTF-8 and 85-column checks passed.
+
 ### Documentation voice
 
 - Standardized history and documentation wording to the project author's

@@ -74,8 +74,12 @@ ROM/scratchpad CRC. E008 indicates a bus/data/power/configuration/conversion
 failure.
 Check the external pull-up, wiring and supply if either persists.
 
-Occasional subtle display jitter is currently a known limitation of
-cooperative scanning during software 1-Wire transfers.
+The long software 1-Wire Reset waits now use dedicated Timer0 and return
+control to the scheduler. Timer1 and the display task are unchanged.
+Presence sampling still occupies about 75 us in the timer ISR, and byte
+transfers remain synchronous (about 560 us each). Check display smoothness
+on the board; this mixed first stage does not guarantee that all jitter
+has disappeared. Heating remains disabled.
 
 For MPLAB, remove obsolete test-build compiler definitions and regenerate
 CMake to refresh the source list. Software 1-Wire is the implemented backend.

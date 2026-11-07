@@ -240,11 +240,25 @@ pull-up or parasite-power conversion is implemented.
 
 Standard-speed slots use 6 us low for Write 1, 60 us for Write 0, and a
 3 us low followed by 8 us to the read sample. Slot duration is at least
-70 us. Reset uses 480 us low, a presence sample 70 us after release and
-410 us recovery. Only timing-critical low/sample intervals mask interrupts,
-preserving their incoming state; the longest masked interval is about 70 us.
-The approximately 1 ms reset is the largest indivisible operation. Byte
-transfers and search triplets are spread over cooperative task invocations.
+70 us. Reset uses at least 480 us low, a presence sample 70 us after release
+and at least 410 us recovery. Timer0 is dedicated to the long Reset phases
+in CTC mode with a /64 clock. Compare thresholds are 112 and 96; rounding
+and one extra counter step cover the free-running prescaler's unknown phase.
+The shared Timer0/Timer1 prescaler is never reset, and Timer1 still supplies
+the approximately 1 ms system tick. OC0 is disconnected from GPIO.
+
+Reset starts with Busy and returns control to the scheduler. Its first
+Timer0 interrupt releases PD2 and retains the verified 70 us software
+presence wait; the second checks recovery and stops Timer0. Repeated polls
+do not restart an active pulse. The completed result is consumed once.
+All discovery, device-selection and conversion Reset states wait on Busy
+without sending bits or publishing an acquisition error.
+Initialization cancels any pending Reset and releases PD2.
+
+Bit slots still mask their critical low/sample intervals and preserve the
+incoming interrupt state. The presence ISR occupies about 75 us including
+overhead; byte transfers remain synchronous within their task invocation.
+Byte transfers and search triplets are spread over cooperative invocations.
 Actual line rise time and display smoothness require board verification.
 Protocol and timing reference:
 [DS18B20 data sheet](https://www.analog.com/media/en/technical-documentation/data-sheets/DS18B20.pdf).
@@ -331,13 +345,16 @@ transactions, invalid scratchpads, unsupported parasite power and conversion
 timeouts produce E008. Acquisition retries automatically; recovery restores
 temperature, HL3 and steady HL7 without another beep. Heating stays disabled.
 
-Display scanning remains cooperative. One software reset occupies about
-960 us and one transferred byte about 560 us, so scanning can be visibly
-delayed despite enabled interrupts between critical timing intervals.
+Display scanning remains cooperative. Reset's long waits now yield to the
+scheduler, but its presence ISR still occupies about 75 us and a transferred
+byte occupies about 560 us of cooperative execution. Scanning can still be
+delayed despite enabled interrupts between critical bit intervals.
 Task priorities cannot preempt an already running bus operation. Two sensors
 add more addressed transfers, not twice the duration of one reset or byte.
-Board testing confirmed occasional subtle display jitter; its scheduling
-solution is not yet agreed, and scanning has not been moved to an interrupt.
+Board testing confirmed occasional subtle display jitter before this mixed
+timer/software revision. Its effect on jitter still needs board verification;
+fully asynchronous bit/byte timing remains future work.
+Scanning has not been moved to an interrupt.
 Digit switching must remain in the display module as a scheduler task.
 BSP only writes GPIO; scan frequency is controlled by the scheduler period,
 not by an interrupt-specific divider or condition.

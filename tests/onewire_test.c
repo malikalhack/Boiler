@@ -72,6 +72,8 @@ static uint8_t parasites;
 static uint8_t bad_crc;
 static bool stuck_low;
 static bool wire_initialized;
+static bool reset_pending;
+static uint16_t reset_started;
 static bool invalid_scratch;
 static bool lost_search;
 static uint16_t conversion_duration;
@@ -124,6 +126,7 @@ static void reset_bus(void) {
     bad_crc = 0U;
     stuck_low = false;
     wire_initialized = false;
+    reset_pending = false;
     invalid_scratch = false;
     lost_search = false;
     conversion_duration = SENSOR_CONVERSION_TICKS;
@@ -335,6 +338,45 @@ static void test_conversion_boundaries(void) {
     }
     presence = 0U;
     assert(await_snapshot() == eResultBus);
+}
+/*----------------------------------------------------------------------------*/
+
+/** @brief Check Reset polling, refresh, reinitialization and tick wrap. */
+static void test_reset_waits(void) {
+    SSensorRom_t roms[SENSOR_CAPACITY];
+    uint8_t count = 0xA5U;
+    uint8_t attempt;
+    unsigned int previous_resets;
+
+    for (attempt = 0U; attempt < 2U; attempt++) {
+        reset_bus();
+        tick = attempt == 0U ? 0U : (AcroTick_t)-1;
+        sensors_init();
+        sensors_update(tick);
+        assert(reset_pending && resets == 1U && slots == 0U);
+        sensors_refresh();
+        sensors_update(tick);
+        assert(reset_pending && resets == 1U && slots == 0U);
+        assert(sensors_search(roms, SENSOR_CAPACITY, &count) == eResultBusy);
+        assert(count == 0xA5U);
+        tick++;
+        sensors_update(tick);
+        assert(reset_pending && resets == 1U && slots == 0U);
+        tick++;
+        sensors_update(tick);
+        assert(!reset_pending && resets == 1U && slots == 0U);
+        assert(await_snapshot() == eResultOk);
+
+        sensors_refresh();
+        sensors_update(tick);
+        assert(reset_pending);
+        previous_resets = resets;
+        sensors_init();
+        assert(!reset_pending);
+        sensors_update(tick);
+        assert(reset_pending && resets == previous_resets + 1U);
+        assert(await_snapshot() == eResultOk);
+    }
 }
 /*----------------------------------------------------------------------------*/
 
@@ -742,21 +784,32 @@ static void test_firmware(void) {
 
 void onewire_init(void) {
     wire_initialized = true;
+    reset_pending = false;
     bus_mode = eBusRom;
 }
 /*----------------------------------------------------------------------------*/
 
 EResult_t onewire_reset(void) {
     assert(wire_initialized);
+    if (reset_pending) {
+        if ((uint16_t)(tick - reset_started) < 2U) {
+            return eResultBusy;
+        }
+        reset_pending = false;
+        return stuck_low ? eResultBus :
+            presence == 0U ? eResultNotFound : eResultOk;
+    }
+    if (stuck_low) {
+        return eResultBus;
+    }
     resets++;
+    reset_started = tick;
+    reset_pending = true;
     input_byte = 0U;
     input_bits = 0U;
     bus_mode = eBusRom;
     selected_devices = presence;
-    if (stuck_low) {
-        return eResultBus;
-    }
-    return presence == 0U ? eResultNotFound : eResultOk;
+    return eResultBusy;
 }
 /*----------------------------------------------------------------------------*/
 
@@ -765,6 +818,7 @@ void onewire_write_bit(bool value) {
     bool bit;
 
     assert(wire_initialized);
+    assert(!reset_pending);
     slots++;
     if (bus_mode == eBusSearch) {
         assert(search_read == 2U);
@@ -797,6 +851,7 @@ bool onewire_read_bit(void) {
     bool bit;
 
     assert(wire_initialized);
+    assert(!reset_pending);
     slots++;
     switch (bus_mode) {
         case eBusSearch:
@@ -935,6 +990,7 @@ int main(void) {
     test_backend();
     test_conversion_boundaries();
     test_resolution_upgrade();
+    test_reset_waits();
     test_firmware();
     puts("Software 1-Wire protocol, DS18B20 and real firmware tests passed");
     return 0;

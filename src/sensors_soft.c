@@ -478,6 +478,9 @@ void sensors_update(uint16_t now) {
     switch (phase) {
         case ePhaseScanReset:
             result = onewire_reset();
+            if (result == eResultBusy) {
+                break;
+            }
             if (result == eResultNotFound && working.count == 0U) {
                 publish(eResultOk, now);
             }
@@ -499,6 +502,9 @@ void sensors_update(uint16_t now) {
             break;
         case ePhaseSelectReset:
             result = onewire_reset();
+            if (result == eResultBusy) {
+                break;
+            }
             if (result != eResultOk) {
                 publish(eResultBus, now);
             }
@@ -544,6 +550,9 @@ void sensors_update(uint16_t now) {
             break;
         case ePhaseConvertReset:
             result = onewire_reset();
+            if (result == eResultBusy) {
+                break;
+            }
             if (result != eResultOk) {
                 publish(eResultBus, now);
             }

@@ -88,6 +88,11 @@ test:
 	$(BUILD_DIR)/tests/menu_test
 	$(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 		-Itests/stubs -I$(INC_DIR) -Ilib -I$(BSP_DIR) \
+		tests/reset_timer_test.c $(BSP_DIR)/onewire.c \
+		-o $(BUILD_DIR)/tests/reset_timer_test
+	$(BUILD_DIR)/tests/reset_timer_test
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+		-Itests/stubs -I$(INC_DIR) -Ilib -I$(BSP_DIR) \
 		tests/onewire_test.c $(SRC_DIR)/sensors_soft.c $(SRC_DIR)/menu.c \
 		$(SRC_DIR)/storage.c $(SRC_DIR)/config.c $(SRC_DIR)/display.c \
 		$(SRC_DIR)/feedback.c $(SRC_DIR)/buttons.c \
