@@ -5,7 +5,7 @@ on:
     branches: [development]
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: read
 
 jobs:
@@ -20,7 +20,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.sha }}
-          token: ${{ secrets.VERSION_BUMP_TOKEN || github.token }}
+          token: ${{ secrets.VERSION_BUMP_TOKEN }}
 
       - name: Update version and push to development
         shell: python

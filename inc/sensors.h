@@ -84,11 +84,13 @@ static inline EError_t sensors_error(EResult_t result) {
 void sensors_init(void);
 
 /**
- * @brief Advance acquisition by one Reset poll, byte or search triplet.
+ * @brief Start or consume one asynchronous bus operation or conversion poll.
  * @param[in] now Current 1 ms system tick; poll once per tick.
  * @note Call sensors_init() before polling or registering the polling task.
- * Reset and conversion waits are non-blocking; pending Reset sends no bits.
- * Timer0 interrupts must run. Poll gaps must be shorter than one
+ * Reset, bits, bytes and search triplets yield while Timer0 completes them.
+ * Pending polls do not repeat commands or advance address/scratchpad indices.
+ * Only short critical software delays remain. Timer0 interrupts must run.
+ * Poll gaps must be shorter than one
  * 16-bit tick wrap. Available for the real software 1-Wire backend only.
  */
 void sensors_update(uint16_t now);
@@ -96,7 +98,8 @@ void sensors_update(uint16_t now);
 /**
  * @brief Request a fresh real-bus snapshot, discarding the previous result.
  * @note Call only after sensors_init(). Used before service measurements;
- * never writes sensor EEPROM.
+ * never writes sensor EEPROM. A pending Reset is allowed to finish; the next
+ * Reset preempts any old bit/byte/triplet operation or unconsumed result.
  */
 void sensors_refresh(void);
 

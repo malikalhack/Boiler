@@ -887,6 +887,77 @@ observations. Release-oriented changes belong in `CHANGELOG.md`.
 - Verification: `make test` passed seven C suites and 26 Python tests.
   Doxygen syntax/parameter, whitespace, UTF-8 and 85-column checks passed.
 
+### Second mixed timer/software 1-Wire stage
+
+- Bench verification confirmed first-stage sensor availability and temperature
+  display. Jitter remained; its relative change was not quantified.
+- Extended dedicated Timer0 to presence, Write 0 low and all slot recovery
+  intervals. Reset low/recovery retain /64; presence and slots use /8 without
+  resetting the shared Timer0/Timer1 prescaler. Timer1, scheduler priorities,
+  display scanning, EEPROM layout and disabled heater outputs are unchanged.
+- Replaced the presence ISR's 70 us software wait with a separate compare.
+  A 62 us timer wait (compare 116) leaves room for register setup and ISR
+  latency within the guaranteed 60..75 us device-presence overlap. The host
+  clock model includes CTC's compare/clear cycle, all 64 shared-clock phases,
+  earliest/latest minimum-length presence and bounded foreground/Timer1
+  interference. AVR disassembly confirms 40 cycles through the early sample,
+  23 cycles from Reset release to timer start and a 41-cycle clock-running
+  return tail (including the 35-cycle epilogue). The additional blocking
+  model allows 86 cycles. Checked linked runtime masking, including EEPROM
+  writes; task-list changes remain startup-only. Clock changes, new handlers
+  or longer masked regions require timing revalidation.
+- Added start/poll operations for single bits, autonomous LSB-first bytes and
+  complete Search ROM triplets. Timer0 starts subsequent slots without another
+  task invocation; the search operation reads both bits and selects the sole
+  or preferred branch. Both reads high fail without a branch write.
+  Results are consumed once, inputs are latched at start and outputs remain
+  unchanged until successful completion. Idle/recovery low faults explicitly
+  stop the operation and invalidate the acquisition.
+- Wired Busy/result handling into discovery, Match/Skip ROM, address bytes,
+  volatile setup, power checks, conversion commands and scratchpad reads.
+  Indices and phases advance only on Ok. Refresh retains pending Reset but
+  its next Reset preempts any old transfer or unconsumed result; initialization
+  cancels all bus work. Conversion timeout uses the read-start tick, so a
+  pre-deadline busy sample cannot become a timeout through later polling.
+- Extended the actual-driver model over all 256 read/write byte values at
+  all 64 clock phases, all search pairs/branch preferences, slot/sample
+  bounds, autonomous progress, polling/input latching, invalid outputs,
+  faults, IRQ restoration, cancellation and Reset preemption.
+  Extended the protocol emulator and firmware integration tests with delayed
+  completions, in-flight/completed refresh, reinitialization, tick wrap,
+  bus faults and conversion-deadline boundaries. Preserved existing test order.
+  Replaced fixed-delay diagnostic/cancellation assertions with an explicit
+  three-second response bound where an old and new acquisition can overlap.
+- Only the 6 us Write 1 pulse and 3+8 us read-sample interval still use
+  software delays. This remains a mixed driver; a whole byte and presence
+  waiting no longer block a task or ISR. Acquisition and jitter still need
+  second-stage board verification. No branch change or commit was made.
+- Verification: `make -B all` passed (10738 bytes Flash / 490 bytes static RAM).
+  `make test` passed seven C suites and 26 Python tests. The final actual-driver
+  and real-firmware suites passed ASan/UBSan with non-PIE host binaries.
+  Doxygen syntax/parameter, UTF-8, whitespace, 85-column and three-level
+  nesting checks passed for new/rewritten functions. Display and main BSP
+  objects are byte-identical to the first stage; the linked image retains
+  strong Timer0/Timer1 handlers and contains no heater-on symbol.
+
+### Required version-bump token under repository rules
+
+- The automatic version push was rejected by repository rules requiring a
+  pull request and verified commit signatures. Changed checkout from an
+  optional token with `GITHUB_TOKEN` fallback to the required Actions secret
+  `VERSION_BUMP_TOKEN`. Checkout persists that authentication for the existing
+  fetch/push operations; absent credentials now fail at checkout.
+- The token needs repository contents write access and its authenticated
+  owner needs bypass permission for both rules on direct automation pushes.
+  Merely providing a token does not bypass the rules. Kept the separate
+  `GITHUB_TOKEN` for read-only PR skip checks and reduced its contents
+  permission to read. No secret values are stored in the repository.
+- Added a workflow-authentication regression check and updated setup guidance.
+  Version selection, retry/idempotency and skip behavior are unchanged.
+- Verification: `python3 -m unittest discover -s tests -p 'version_workflow_test.py'`
+  passed all 15 tests; `git diff --check` passed. The updated workflow still
+  needs a GitHub run after pushing these changes.
+
 ### Documentation voice
 
 - Standardized history and documentation wording to the project author's

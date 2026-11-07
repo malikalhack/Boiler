@@ -40,6 +40,48 @@
 #define TEST_EEPROM_SIZE (512U)
 
 /**
+ * @def TRANSFER_TICKS
+ * @brief Emulated bit, byte or triplet completion delay in scheduler ticks.
+ */
+#define TRANSFER_TICKS 1U
+
+/**
+ * @def CONVERSION_START_LIMIT
+ * @brief Bounded ticks allowed for asynchronous discovery and sensor setup.
+ */
+#define CONVERSION_START_LIMIT 500U
+
+/**
+ * @def TEST_BYTE_BITS
+ * @brief Number of least-significant-bit-first wire slots in a byte.
+ */
+#define TEST_BYTE_BITS 8U
+
+/**
+ * @def TEST_ROM_BITS
+ * @brief Number of address bits resolved by Search ROM.
+ */
+#define TEST_ROM_BITS (SENSOR_ROM_SIZE * TEST_BYTE_BITS)
+
+/**
+ * @def TEST_SEARCH_READS
+ * @brief ID and complement reads preceding each search direction.
+ */
+#define TEST_SEARCH_READS 2U
+
+/**
+ * @def FIRMWARE_ERROR_LIMIT
+ * @brief Maximum ticks allowed to finish old/new acquisitions after bus change.
+ */
+#define FIRMWARE_ERROR_LIMIT 3000U
+
+/**
+ * @def TEST_COMPLETION_STATES
+ * @brief In-flight and completed-but-unconsumed refresh fixtures.
+ */
+#define TEST_COMPLETION_STATES 2U
+
+/**
  * @enum EBusMode
  * @brief Expected ROM-command or function stage of the simulated wire bus.
  */
@@ -53,6 +95,18 @@ typedef enum EBusMode {
     eBusScratch,    /**< Supply scratchpad bytes. */
     eBusWriteSetup  /**< Receive volatile alarms and configuration. */
 } EBusMode_t;
+
+/**
+ * @enum ETestTransfer
+ * @brief Independently emulated operation awaiting result consumption.
+ */
+typedef enum ETestTransfer {
+    eTestWriteBit,  /**< One write slot. */
+    eTestReadBit,   /**< One read slot. */
+    eTestWriteByte, /**< Eight write slots. */
+    eTestReadByte,  /**< Eight read slots. */
+    eTestTriplet    /**< Two reads and one selected branch. */
+} ETestTransfer_t;
 
 /****************************** Module variables ******************************/
 
@@ -74,6 +128,12 @@ static bool stuck_low;
 static bool wire_initialized;
 static bool reset_pending;
 static uint16_t reset_started;
+static bool transfer_pending;
+static bool transfer_done;
+static ETestTransfer_t transfer_kind;
+static uint16_t transfer_started;
+static uint8_t transfer_output;
+static EResult_t transfer_status;
 static bool invalid_scratch;
 static bool lost_search;
 static uint16_t conversion_duration;
@@ -105,6 +165,10 @@ static uint8_t registered;
 static bool app_running;
 static jmp_buf scheduler_exit;
 
+/***************************** Private prototypes *****************************/
+
+static void receive_byte(uint8_t value);
+
 /****************************** Private functions *****************************/
 
 /** @brief Restore powered, distinct DS18B20 fixtures and clear injected faults. */
@@ -127,6 +191,8 @@ static void reset_bus(void) {
     stuck_low = false;
     wire_initialized = false;
     reset_pending = false;
+    transfer_pending = false;
+    transfer_done = false;
     invalid_scratch = false;
     lost_search = false;
     conversion_duration = SENSOR_CONVERSION_TICKS;
@@ -141,6 +207,192 @@ static void reset_bus(void) {
     corrupt_setup_crc = false;
     downgrade_after_convert = false;
     tick = 0U;
+}
+/*----------------------------------------------------------------------------*/
+
+/**
+ * @brief Apply one physical write slot to the emulated protocol.
+ * @param[in] value Bit sent by the master.
+ */
+static void send_bit(bool value) {
+    uint8_t index;
+    bool bit;
+
+    assert(wire_initialized && !reset_pending);
+    slots++;
+    if (bus_mode == eBusSearch) {
+        assert(search_read == TEST_SEARCH_READS);
+        for (index = 0U; index < TEST_DEVICES; index++) {
+            bit = (fixtures[index].bytes[search_position / TEST_BYTE_BITS] &
+                   1U << (search_position % TEST_BYTE_BITS)) != 0U;
+            if (bit != value) {
+                candidates &= (uint8_t)~(1U << index);
+            }
+        }
+        search_read = 0U;
+        search_position++;
+    }
+    else {
+        if (value) {
+            input_byte |= 1U << input_bits;
+        }
+        if (++input_bits == TEST_BYTE_BITS) {
+            receive_byte(input_byte);
+            input_byte = 0U;
+            input_bits = 0U;
+        }
+    }
+}
+/*----------------------------------------------------------------------------*/
+
+/**
+ * @brief Sample one physical read slot from the emulated protocol.
+ * @returns Wired-AND bus response for the current protocol stage.
+ */
+static bool receive_bit(void) {
+    uint8_t index;
+    bool ret_val = true;
+    bool bit;
+
+    assert(wire_initialized && !reset_pending);
+    slots++;
+    switch (bus_mode) {
+        case eBusSearch:
+            assert(search_position < TEST_ROM_BITS &&
+                   search_read < TEST_SEARCH_READS);
+            for (index = 0U; index < TEST_DEVICES; index++) {
+                if (!lost_search && (candidates & 1U << index) != 0U) {
+                    bit = (fixtures[index].bytes[search_position /
+                           TEST_BYTE_BITS] &
+                           1U << (search_position % TEST_BYTE_BITS)) != 0U;
+                    ret_val &= search_read == 0U ? bit : !bit;
+                }
+            }
+            search_read++;
+            break;
+        case eBusPower:
+            ret_val = (parasites & selected_devices & presence) == 0U;
+            break;
+        case eBusConvert:
+            ret_val = (uint16_t)(tick - conversion_started) >=
+                conversion_duration;
+            break;
+        case eBusScratch:
+            assert(output_bit < sizeof(output) * TEST_BYTE_BITS);
+            ret_val = (output[output_bit / TEST_BYTE_BITS] &
+                       1U << (output_bit % TEST_BYTE_BITS)) != 0U;
+            output_bit++;
+            break;
+        default:
+            assert(false);
+            break;
+    }
+    return ret_val;
+}
+/*----------------------------------------------------------------------------*/
+
+/** @brief Complete a latched transfer independently of foreground polling. */
+static void advance_wire(void) {
+    if (transfer_pending &&
+        (uint16_t)(tick - transfer_started) >= TRANSFER_TICKS) {
+        transfer_pending = false;
+        transfer_done = true;
+        if (stuck_low) {
+            transfer_status = eResultBus;
+        }
+    }
+}
+/*----------------------------------------------------------------------------*/
+
+/**
+ * @brief Execute and latch the protocol slots of one emulated operation.
+ * @param[in] kind Requested bit, byte or triplet operation.
+ * @param[in] value Write byte, write bit or preferred branch.
+ */
+static void execute_transfer(ETestTransfer_t kind, uint8_t value) {
+    uint8_t bit;
+    bool direction;
+
+    transfer_kind = kind;
+    transfer_started = tick;
+    transfer_output = 0U;
+    transfer_status = eResultOk;
+    switch (kind) {
+        case eTestWriteBit:
+            send_bit(value != 0U);
+            break;
+        case eTestReadBit:
+            transfer_output = receive_bit();
+            break;
+        case eTestWriteByte:
+            for (bit = 0U; bit < TEST_BYTE_BITS; bit++) {
+                send_bit((value & 1U << bit) != 0U);
+            }
+            break;
+        case eTestReadByte:
+            for (bit = 0U; bit < TEST_BYTE_BITS; bit++) {
+                if (receive_bit()) {
+                    transfer_output |= 1U << bit;
+                }
+            }
+            break;
+        case eTestTriplet:
+            if (receive_bit()) {
+                transfer_output |= ONEWIRE_SEARCH_ID;
+            }
+            if (receive_bit()) {
+                transfer_output |= ONEWIRE_SEARCH_COMPLEMENT;
+            }
+            if (transfer_output ==
+                (ONEWIRE_SEARCH_ID | ONEWIRE_SEARCH_COMPLEMENT)) {
+                transfer_status = eResultBus;
+                break;
+            }
+            direction = transfer_output == ONEWIRE_SEARCH_ID;
+            if (transfer_output == 0U) {
+                direction = value != 0U;
+            }
+            send_bit(direction);
+            if (direction) {
+                transfer_output |= ONEWIRE_SEARCH_DIRECTION;
+            }
+            break;
+    }
+    transfer_pending = true;
+}
+/*----------------------------------------------------------------------------*/
+
+/**
+ * @brief Execute protocol slots once and delay their latched completion.
+ * @param[in] kind Requested bit, byte or triplet operation.
+ * @param[in] value Write byte, write bit or preferred branch.
+ * @param[out] output Completed read data, or NULL for writes.
+ * @returns Busy, successful completion or a latched bus fault.
+ */
+static EResult_t emulate_transfer(
+    ETestTransfer_t kind, uint8_t value, uint8_t *output
+) {
+    EResult_t ret_val = eResultBusy;
+
+    assert(wire_initialized && !reset_pending);
+    advance_wire();
+    if (transfer_pending || transfer_done) {
+        assert(kind == transfer_kind);
+        if (transfer_done) {
+            ret_val = transfer_status;
+            if (ret_val == eResultOk && output != NULL) {
+                *output = transfer_output;
+            }
+            transfer_done = false;
+        }
+    }
+    else if (stuck_low) {
+        ret_val = eResultBus;
+    }
+    else {
+        execute_transfer(kind, value);
+    }
+    return ret_val;
 }
 /*----------------------------------------------------------------------------*/
 
@@ -191,7 +443,7 @@ static void receive_byte(uint8_t value) {
             }
             else if (value == 0x44U) {
                 conversions++;
-                conversion_started = tick;
+                conversion_started = tick + TRANSFER_TICKS;
                 bus_mode = eBusConvert;
                 if (downgrade_after_convert) {
                     resolutions[0] = 0x3FU;
@@ -299,11 +551,14 @@ static void test_conversion_boundaries(void) {
 
     reset_bus();
     sensors_init();
-    for (limit = 0U; limit < 200U && conversions == 0U; limit++) {
+    for (limit = 0U; limit < CONVERSION_START_LIMIT &&
+         (conversions == 0U || transfer_pending || transfer_done);
+         limit++) {
         poll_backend();
     }
     assert(conversions == 1U);
     tick = conversion_started + SENSOR_CONVERSION_TICKS - 1U;
+    advance_wire();
     previous_slots = slots;
     previous_resets = resets;
     sensors_update(tick);
@@ -313,6 +568,9 @@ static void test_conversion_boundaries(void) {
     tick++;
     sensors_update(tick);
     assert(slots == previous_slots + 1U && resets == previous_resets);
+    assert(transfer_pending);
+    tick += TRANSFER_TICKS;
+    sensors_update(tick);
     sensors_update(tick);
     assert(resets == previous_resets + 1U);
     assert(await_snapshot() == eResultOk);
@@ -320,16 +578,43 @@ static void test_conversion_boundaries(void) {
     conversion_duration = SENSOR_TIMEOUT_TICKS + 1U;
     sensors_refresh();
     previous_slots = conversions;
-    for (limit = 0U; limit < 200U && conversions == previous_slots; limit++) {
+    for (limit = 0U;
+         limit < CONVERSION_START_LIMIT &&
+         (conversions == previous_slots || transfer_pending || transfer_done);
+         limit++) {
         poll_backend();
     }
     assert(conversions == previous_slots + 1U);
     tick = conversion_started + SENSOR_TIMEOUT_TICKS - 1U;
+    advance_wire();
     sensors_update(tick);
     assert(sensors_search(roms, 2U, &count) == eResultBusy);
     tick++;
     sensors_update(tick);
+    assert(sensors_search(roms, 2U, &count) == eResultBusy);
+    sensors_update(tick);
+    tick += TRANSFER_TICKS;
+    sensors_update(tick);
     assert(sensors_search(roms, 2U, &count) == eResultTimeout);
+
+    reset_bus();
+    conversion_duration = SENSOR_TIMEOUT_TICKS;
+    sensors_init();
+    for (limit = 0U; limit < CONVERSION_START_LIMIT &&
+         (conversions == 0U || transfer_pending || transfer_done); limit++) {
+        poll_backend();
+    }
+    assert(conversions == 1U && !transfer_pending && !transfer_done);
+    tick = conversion_started + SENSOR_TIMEOUT_TICKS - 1U;
+    sensors_update(tick);
+    assert(transfer_pending);
+    tick++;
+    sensors_update(tick);
+    assert(sensors_search(roms, 2U, &count) == eResultBusy);
+    sensors_update(tick);
+    tick += TRANSFER_TICKS;
+    sensors_update(tick);
+    assert(await_snapshot() == eResultOk);
 
     reset_bus();
     sensors_init();
@@ -338,6 +623,79 @@ static void test_conversion_boundaries(void) {
     }
     presence = 0U;
     assert(await_snapshot() == eResultBus);
+}
+/*----------------------------------------------------------------------------*/
+
+/**
+ * @brief Reach a requested in-flight transfer through ordinary backend polling.
+ * @param[in] kind Expected asynchronous transfer.
+ */
+static void await_transfer(ETestTransfer_t kind) {
+    uint16_t limit;
+
+    for (limit = 0U; limit < CONVERSION_START_LIMIT; limit++) {
+        poll_backend();
+        if (transfer_pending && transfer_kind == kind) {
+            break;
+        }
+    }
+    assert(transfer_pending && transfer_kind == kind);
+}
+/*----------------------------------------------------------------------------*/
+
+/** @brief Check pending/completed transfer refresh, cancellation and bus faults. */
+static void test_transfer_waits(void) {
+    ETestTransfer_t kind;
+    SSensorRom_t roms[SENSOR_CAPACITY];
+    uint8_t count;
+    uint8_t completed;
+    unsigned int previous_slots;
+    unsigned int previous_resets;
+
+    for (kind = eTestReadBit; kind <= eTestTriplet; kind++) {
+        for (completed = 0U; completed < TEST_COMPLETION_STATES; completed++) {
+            reset_bus();
+            sensors_init();
+            await_transfer(kind);
+            transfer_started = UINT16_MAX;
+            tick = UINT16_MAX;
+            previous_slots = slots;
+            previous_resets = resets;
+            count = 0xA5U;
+            sensors_update(tick);
+            sensors_update(tick);
+            assert(transfer_pending && !transfer_done);
+            assert(slots == previous_slots && resets == previous_resets);
+            assert(sensors_search(roms, SENSOR_CAPACITY, &count) == eResultBusy);
+            assert(count == 0xA5U);
+            if (completed != 0U) {
+                tick++;
+                advance_wire();
+                assert(!transfer_pending && transfer_done);
+            }
+            sensors_refresh();
+            sensors_update(tick);
+            assert(reset_pending && !transfer_pending && !transfer_done);
+            assert(resets == previous_resets + 1U && slots == previous_slots);
+            assert(await_snapshot() == eResultOk);
+
+            sensors_refresh();
+            await_transfer(kind);
+            sensors_init();
+            assert(!transfer_pending && !transfer_done && !reset_pending);
+            assert(await_snapshot() == eResultOk);
+        }
+
+        sensors_refresh();
+        await_transfer(kind);
+        stuck_low = true;
+        tick += TRANSFER_TICKS;
+        sensors_update(tick);
+        assert(sensors_search(roms, SENSOR_CAPACITY, &count) == eResultBus);
+        stuck_low = false;
+        sensors_refresh();
+        assert(await_snapshot() == eResultOk);
+    }
 }
 /*----------------------------------------------------------------------------*/
 
@@ -644,6 +1002,7 @@ static void boot(uint8_t buttons) {
 static void advance(uint16_t count) {
     while (count-- != 0U) {
         tick++;
+        advance_wire();
         display_scan(NULL);
         feedback_update(NULL);
         buttons_poll(NULL);
@@ -668,6 +1027,22 @@ static void press(EButton_t button) {
 /** @brief Capture a complete frame after two display scan cycles. */
 static void capture_frame(void) {
     advance(DISPLAY_SLOTS * 2U);
+}
+/*----------------------------------------------------------------------------*/
+
+/**
+ * @brief Await a diagnostic after completing any old and new acquisitions.
+ * @param[in] expected Diagnostic that the changed bus must produce.
+ * @note The bounded wait verifies the maximum response window, not a delay.
+ */
+static void await_error(EError_t expected) {
+    uint16_t limit;
+
+    for (limit = 0U; limit < FIRMWARE_ERROR_LIMIT && active_error != expected;
+         limit++) {
+        advance(1U);
+    }
+    assert(active_error == expected);
 }
 /*----------------------------------------------------------------------------*/
 
@@ -739,7 +1114,7 @@ static void test_firmware(void) {
     advance(1600U);
     assert(active_error == eErrorNone);
     presence = 3U;
-    advance(1800U);
+    await_error(eErrorUnknownSensor);
     assert(active_error == eErrorUnknownSensor);
     boot(eButtonLeft | eButtonRight);
     advance(BUTTON_DEBOUNCE_TICKS + MENU_STARTUP_HOLD_TICKS + 2U);
@@ -748,7 +1123,7 @@ static void test_firmware(void) {
     advance(BUTTON_DEBOUNCE_TICKS + 1U);
     presence = 1U;
     press(eButtonLeft);
-    advance(1100U);
+    await_error(eErrorNone);
     assert(menu_get_state() == eMenuIdle && active_error == eErrorNone);
     assert(writes == previous_writes);
     /* A failed check is retryable without changing EEPROM. */
@@ -764,7 +1139,7 @@ static void test_firmware(void) {
     advance(1100U);
     assert(menu_get_state() == eMenuCheck);
     press(eButtonLeft);
-    advance(1100U);
+    await_error(eErrorNone);
     assert(active_error == eErrorNone && writes == previous_writes);
     fixtures[1].bytes[0] = 0x10U;
     fixtures[1].bytes[7] = crc8(fixtures[1].bytes, 7U);
@@ -785,6 +1160,8 @@ static void test_firmware(void) {
 void onewire_init(void) {
     wire_initialized = true;
     reset_pending = false;
+    transfer_pending = false;
+    transfer_done = false;
     bus_mode = eBusRom;
 }
 /*----------------------------------------------------------------------------*/
@@ -802,6 +1179,8 @@ EResult_t onewire_reset(void) {
     if (stuck_low) {
         return eResultBus;
     }
+    transfer_pending = false;
+    transfer_done = false;
     resets++;
     reset_started = tick;
     reset_pending = true;
@@ -813,70 +1192,44 @@ EResult_t onewire_reset(void) {
 }
 /*----------------------------------------------------------------------------*/
 
-void onewire_write_bit(bool value) {
-    uint8_t index;
-    bool bit;
-
-    assert(wire_initialized);
-    assert(!reset_pending);
-    slots++;
-    if (bus_mode == eBusSearch) {
-        assert(search_read == 2U);
-        for (index = 0U; index < TEST_DEVICES; index++) {
-            bit = (fixtures[index].bytes[search_position / 8U] &
-                   (1U << (search_position % 8U))) != 0U;
-            if (bit != value) {
-                candidates &= (uint8_t)~(1U << index);
-            }
-        }
-        search_read = 0U;
-        search_position++;
-    }
-    else {
-        if (value) {
-            input_byte |= 1U << input_bits;
-        }
-        if (++input_bits == 8U) {
-            receive_byte(input_byte);
-            input_byte = 0U;
-            input_bits = 0U;
-        }
-    }
+EResult_t onewire_write_bit(bool value) {
+    return emulate_transfer(eTestWriteBit, value, NULL);
 }
 /*----------------------------------------------------------------------------*/
 
-bool onewire_read_bit(void) {
-    uint8_t index;
-    bool value = true;
-    bool bit;
+EResult_t onewire_read_bit(bool *value) {
+    uint8_t data;
+    EResult_t ret_val;
 
-    assert(wire_initialized);
-    assert(!reset_pending);
-    slots++;
-    switch (bus_mode) {
-        case eBusSearch:
-            assert(search_position < 64U && search_read < 2U);
-            for (index = 0U; index < TEST_DEVICES; index++) {
-                if (!lost_search && (candidates & 1U << index) != 0U) {
-                    bit = (fixtures[index].bytes[search_position / 8U] &
-                           (1U << (search_position % 8U))) != 0U;
-                    value &= search_read == 0U ? bit : !bit;
-                }
-            }
-            search_read++;
-            return value;
-        case eBusPower:
-            return (parasites & selected_devices & presence) == 0U;
-        case eBusConvert:
-            return (uint16_t)(tick - conversion_started) >= conversion_duration;
-        case eBusScratch:
-            assert(output_bit < sizeof(output) * 8U);
-            value = (output[output_bit / 8U] &
-                     (1U << (output_bit % 8U))) != 0U;
-            output_bit++;
-            return value;
-        default: assert(false); return false;
+    if (value == NULL) {
+        return eResultInvalidArgument;
     }
+    ret_val = emulate_transfer(eTestReadBit, 0U, &data);
+    if (ret_val == eResultOk) {
+        *value = data != 0U;
+    }
+    return ret_val;
+}
+/*----------------------------------------------------------------------------*/
+
+EResult_t onewire_write_byte(uint8_t value) {
+    return emulate_transfer(eTestWriteByte, value, NULL);
+}
+/*----------------------------------------------------------------------------*/
+
+EResult_t onewire_read_byte(uint8_t *value) {
+    if (value == NULL) {
+        return eResultInvalidArgument;
+    }
+    return emulate_transfer(eTestReadByte, 0U, value);
+}
+/*----------------------------------------------------------------------------*/
+
+EResult_t onewire_triplet(bool direction, uint8_t *bits) {
+    if (bits == NULL) {
+        return eResultInvalidArgument;
+    }
+    return emulate_transfer(eTestTriplet, direction, bits);
 }
 /*----------------------------------------------------------------------------*/
 
@@ -991,6 +1344,7 @@ int main(void) {
     test_conversion_boundaries();
     test_resolution_upgrade();
     test_reset_waits();
+    test_transfer_waits();
     test_firmware();
     puts("Software 1-Wire protocol, DS18B20 and real firmware tests passed");
     return 0;

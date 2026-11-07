@@ -11,7 +11,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/version-bump-on-development.yml"
-CODE = textwrap.dedent(WORKFLOW.read_text().split("        run: |\n", 1)[1])
+WORKFLOW_TEXT = WORKFLOW.read_text()
+CODE = textwrap.dedent(WORKFLOW_TEXT.split("        run: |\n", 1)[1])
 HEADER = b"/**\n * @version 0.1.0\n * @authors Anton Chernov\n */\n"
 
 
@@ -117,6 +118,16 @@ class VersionWorkflowTest(unittest.TestCase):
 
     def assert_version(self, version):
         self.assertEqual((self.work / "VERSION").read_text(), version + "\n")
+
+    def test_checkout_requires_bypass_token_and_api_uses_read_token(self):
+        checkout = WORKFLOW_TEXT.split(
+            "      - name: Checkout pushed commit\n", 1,
+        )[1].split("      - name:", 1)[0]
+        self.assertIn("token: ${{ secrets.VERSION_BUMP_TOKEN }}", checkout)
+        self.assertNotIn("github.token", checkout)
+        self.assertIn("GH_TOKEN: ${{ github.token }}", WORKFLOW_TEXT)
+        self.assertIn("  contents: read\n", WORKFLOW_TEXT)
+        self.assertNotIn("  contents: write\n", WORKFLOW_TEXT)
 
     def test_direct_push_updates_headers_once_and_rerun_is_idempotent(self):
         self.run_workflow()

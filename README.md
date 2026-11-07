@@ -52,8 +52,9 @@ For the first single-sensor test:
 3. At `CONF`, Enter; at `SAVE`, Enter again to confirm writing EEPROM.
 4. Wait for automatic application and the temperature screen.
 
-Each real-bus check takes about one second; the prompt remains visible while
-it runs. Right has no action and no presence decimal points appear.
+Each real-bus check takes about one second with one sensor; two sensors and
+resolution setup need longer. The prompt remains visible while it runs.
+Right has no action and no presence decimal points appear.
 On a failed check, Enter retries and Left cancels before writing begins.
 Normal temperature-screen buttons remain inactive.
 
@@ -74,11 +75,12 @@ ROM/scratchpad CRC. E008 indicates a bus/data/power/configuration/conversion
 failure.
 Check the external pull-up, wiring and supply if either persists.
 
-The long software 1-Wire Reset waits now use dedicated Timer0 and return
-control to the scheduler. Timer1 and the display task are unchanged.
-Presence sampling still occupies about 75 us in the timer ISR, and byte
-transfers remain synchronous (about 560 us each). Check display smoothness
-on the board; this mixed first stage does not guarantee that all jitter
+Software 1-Wire Reset, presence, bit-slot recovery, bytes and search triplets
+now use dedicated Timer0 and return control to the scheduler. Timer1 and the
+display task are unchanged. Only the short Write 1 pulse and read-sample
+interval retain software delays (6 us and 3+8 us); a whole byte no longer
+blocks a task. Check acquisition, service, recovery and display smoothness
+on the board. This second mixed stage does not guarantee that all jitter
 has disappeared. Heating remains disabled.
 
 For MPLAB, remove obsolete test-build compiler definitions and regenerate
@@ -162,11 +164,14 @@ commit do not increment the version again.
 Commit selection uses the push event payload, so rewritten history does not
 require the previous branch-tip commit to remain available.
 
-The version workflow needs permission to push to `development`. The default
-`GITHUB_TOKEN` works when repository rules allow it; otherwise configure the
-optional `VERSION_BUMP_TOKEN` secret with repository contents write access
-and allow its owner to push under the branch rules. The workflow's
-`GITHUB_TOKEN` also needs pull-request read access for the skip check.
+The version workflow requires the repository Actions secret
+`VERSION_BUMP_TOKEN` with repository contents write access. Its authenticated
+owner must be allowed to bypass the `development` rules requiring a pull
+request and verified commit signatures for these direct automation pushes.
+The workflow does not fall back to `GITHUB_TOKEN`; missing credentials fail
+at checkout, and a token without the required bypass still cannot push.
+`GITHUB_TOKEN` is used only for the PR skip check, with contents and
+pull-request read access.
 The commit-summary workflow needs pull-request write access and updates only
 the marked `Commits` section, preserving the rest of the PR description.
 

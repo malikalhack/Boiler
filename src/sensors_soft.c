@@ -168,6 +168,7 @@ typedef enum EPhase {
     ePhaseConvertSkip,    /**< Send Skip ROM. */
     ePhaseConvertCommand, /**< Send Convert T. */
     ePhaseConvertWait,    /**< Await conversion without blocking. */
+    ePhaseConvertPoll,    /**< Consume the asynchronous completion read. */
     ePhaseScratchpad,     /**< Read one scratchpad byte. */
     ePhasePause           /**< Wait before starting another acquisition. */
 } EPhase_t;
@@ -214,39 +215,9 @@ static bool configuration_written;
 static uint8_t alarm_high;
 static uint8_t alarm_low;
 static uint16_t phase_tick;
+static uint16_t conversion_poll_tick;
 
 /****************************** Private functions *****************************/
-/**
- * @brief Send one complete wire byte within a bounded task invocation.
- * @param[in] value Byte to send least-significant bit first.
- */
-static void write_byte(uint8_t value) {
-    uint8_t bit;
-
-    for (bit = 0U; bit < BYTE_BITS; bit++) {
-        onewire_write_bit((value & 1U) != 0U);
-        value >>= 1U;
-    }
-}
-/*----------------------------------------------------------------------------*/
-
-/**
- * @brief Read one complete wire byte within a bounded task invocation.
- * @returns Byte assembled least-significant bit first.
- */
-static uint8_t read_byte(void) {
-    uint8_t value = 0U;
-    uint8_t bit;
-
-    for (bit = 0U; bit < BYTE_BITS; bit++) {
-        if (onewire_read_bit()) {
-            value |= 1U << bit;
-        }
-    }
-    return value;
-}
-/*----------------------------------------------------------------------------*/
-
 /**
  * @brief Publish a complete snapshot or invalidate it on acquisition failure.
  * @param[in] result Completed acquisition result.
@@ -259,6 +230,20 @@ static void publish(EResult_t result, uint16_t now) {
     snapshot_result = result;
     phase_tick = now;
     phase = ePhasePause;
+}
+/*----------------------------------------------------------------------------*/
+
+/**
+ * @brief Keep a pending phase or publish an explicit transfer failure.
+ * @param[in] result Current bit, byte or triplet result.
+ * @param[in] now Tick used when publishing a failure.
+ * @returns True only when the transfer completed successfully.
+ */
+static bool transfer_complete(EResult_t result, uint16_t now) {
+    if (result != eResultOk && result != eResultBusy) {
+        publish(result, now);
+    }
+    return result == eResultOk;
 }
 /*----------------------------------------------------------------------------*/
 
@@ -330,28 +315,21 @@ static void advance_device(uint16_t now) {
  * @param[in] now Tick used when discovery completes or fails.
  */
 static void search_triplet(uint16_t now) {
-    bool id = onewire_read_bit();
-    bool complement = onewire_read_bit();
+    uint8_t bits;
     bool direction;
     uint8_t index = (search_bit - 1U) / BYTE_BITS;
     uint8_t mask = 1U << ((search_bit - 1U) % BYTE_BITS);
+    bool preferred = search_bit < last_discrepancy ?
+        (search_rom.bytes[index] & mask) != 0U : search_bit == last_discrepancy;
 
-    if (id && complement) {
-        publish(eResultBus, now);
+    if (!transfer_complete(onewire_triplet(preferred, &bits), now)) {
         return;
     }
-    if (id != complement) {
-        direction = id;
+    direction = (bits & ONEWIRE_SEARCH_DIRECTION) != 0U;
+    if ((bits & (ONEWIRE_SEARCH_ID | ONEWIRE_SEARCH_COMPLEMENT)) == 0U &&
+        !direction) {
+        next_discrepancy = search_bit;
     }
-    else {
-        direction = search_bit < last_discrepancy ?
-            (search_rom.bytes[index] & mask) != 0U :
-            search_bit == last_discrepancy;
-        if (!direction) {
-            next_discrepancy = search_bit;
-        }
-    }
-    onewire_write_bit(direction);
     if (direction) {
         search_rom.bytes[index] |= mask;
     }
@@ -457,6 +435,29 @@ static EResult_t decode_temperature(int16_t *temperature) {
     }
     return ret_val;
 }
+/*----------------------------------------------------------------------------*/
+
+/**
+ * @brief Validate a complete setup or temperature scratchpad and advance.
+ * @param[in] now Tick used when publishing an acquisition result.
+ */
+static void finish_scratchpad(uint16_t now) {
+    EResult_t result;
+
+    if (operation == eOperationSetup) {
+        prepare_sensor(now);
+    }
+    else {
+        result = decode_temperature(&working.temperatures[device]);
+        if (result != eResultOk) {
+            publish(result, now);
+        }
+        else {
+            advance_device(now);
+        }
+    }
+}
+/*----------------------------------------------------------------------------*/
 
 /********************** Application Programming Interface *********************/
 
@@ -474,6 +475,7 @@ void sensors_refresh(void) {
 
 void sensors_update(uint16_t now) {
     EResult_t result;
+    bool bit;
 
     switch (phase) {
         case ePhaseScanReset:
@@ -492,10 +494,11 @@ void sensors_update(uint16_t now) {
             }
             break;
         case ePhaseScanCommand:
-            write_byte(ROM_SEARCH);
-            search_bit = 1U;
-            next_discrepancy = 0U;
-            phase = ePhaseScanBit;
+            if (transfer_complete(onewire_write_byte(ROM_SEARCH), now)) {
+                search_bit = 1U;
+                next_discrepancy = 0U;
+                phase = ePhaseScanBit;
+            }
             break;
         case ePhaseScanBit:
             search_triplet(now);
@@ -513,39 +516,48 @@ void sensors_update(uint16_t now) {
             }
             break;
         case ePhaseSelectCommand:
-            write_byte(ROM_MATCH);
-            byte_index = 0U;
-            phase = ePhaseSelectRom;
+            if (transfer_complete(onewire_write_byte(ROM_MATCH), now)) {
+                byte_index = 0U;
+                phase = ePhaseSelectRom;
+            }
             break;
         case ePhaseSelectRom:
-            write_byte(working.roms[device].bytes[byte_index++]);
-            if (byte_index == SENSOR_ROM_SIZE) {
-                phase = ePhaseFunction;
+            if (transfer_complete(onewire_write_byte(
+                    working.roms[device].bytes[byte_index]), now)) {
+                if (++byte_index == SENSOR_ROM_SIZE) {
+                    phase = ePhaseFunction;
+                }
             }
             break;
         case ePhaseFunction:
-            write_byte(operation_commands[operation]);
-            byte_index = 0U;
-            phase = operation == eOperationPower ? ePhasePower :
-                operation == eOperationConfigure ? ePhaseConfigure :
-                ePhaseScratchpad;
+            if (transfer_complete(onewire_write_byte(
+                    operation_commands[operation]), now)) {
+                byte_index = 0U;
+                phase = operation == eOperationPower ? ePhasePower :
+                    operation == eOperationConfigure ? ePhaseConfigure :
+                    ePhaseScratchpad;
+            }
             break;
         case ePhasePower:
-            if (!onewire_read_bit()) {
-                publish(eResultPower, now);
-            }
-            else {
-                operation = eOperationSetup;
-                select_device();
+            if (transfer_complete(onewire_read_bit(&bit), now)) {
+                if (!bit) {
+                    publish(eResultPower, now);
+                }
+                else {
+                    operation = eOperationSetup;
+                    select_device();
+                }
             }
             break;
         case ePhaseConfigure:
-            write_byte(byte_index == 0U ? alarm_high :
-                       byte_index == 1U ? alarm_low : SENSOR_CONFIG_12BIT);
-            if (++byte_index == CONFIG_BYTES) {
-                configuration_written = true;
-                operation = eOperationSetup;
-                select_device();
+            if (transfer_complete(onewire_write_byte(
+                    byte_index == 0U ? alarm_high :
+                    byte_index == 1U ? alarm_low : SENSOR_CONFIG_12BIT), now)) {
+                if (++byte_index == CONFIG_BYTES) {
+                    configuration_written = true;
+                    operation = eOperationSetup;
+                    select_device();
+                }
             }
             break;
         case ePhaseConvertReset:
@@ -561,41 +573,46 @@ void sensors_update(uint16_t now) {
             }
             break;
         case ePhaseConvertSkip:
-            write_byte(ROM_SKIP);
-            phase = ePhaseConvertCommand;
+            if (transfer_complete(onewire_write_byte(ROM_SKIP), now)) {
+                phase = ePhaseConvertCommand;
+            }
             break;
         case ePhaseConvertCommand:
-            write_byte(CONVERT_TEMP);
-            phase_tick = now;
-            phase = ePhaseConvertWait;
+            if (transfer_complete(onewire_write_byte(CONVERT_TEMP), now)) {
+                phase_tick = now;
+                phase = ePhaseConvertWait;
+            }
             break;
         case ePhaseConvertWait:
-            if ((uint16_t)(now - phase_tick) >= SENSOR_CONVERSION_TICKS) {
-                if (onewire_read_bit()) {
+            if ((uint16_t)(now - phase_tick) < SENSOR_CONVERSION_TICKS) {
+                break;
+            }
+            conversion_poll_tick = now;
+            phase = ePhaseConvertPoll;
+            /* fall through */
+        case ePhaseConvertPoll:
+            if (transfer_complete(onewire_read_bit(&bit), now)) {
+                if (bit) {
                     operation = eOperationRead;
                     device = 0U;
                     select_device();
                 }
-                else if ((uint16_t)(now - phase_tick) >= SENSOR_TIMEOUT_TICKS) {
+                else if ((uint16_t)(conversion_poll_tick - phase_tick) >=
+                         SENSOR_TIMEOUT_TICKS) {
                     publish(eResultTimeout, now);
+                }
+                else {
+                    phase = ePhaseConvertWait;
                 }
             }
             break;
         case ePhaseScratchpad:
-            scratchpad[byte_index++] = read_byte();
-            if (byte_index == SCRATCHPAD_SIZE) {
-                if (operation == eOperationSetup) {
-                    prepare_sensor(now);
-                }
-                else {
-                    result = decode_temperature(&working.temperatures[device]);
-                    if (result != eResultOk) {
-                        publish(result, now);
-                    }
-                    else {
-                        advance_device(now);
-                    }
-                }
+            if (!transfer_complete(onewire_read_byte(
+                    &scratchpad[byte_index]), now)) {
+                break;
+            }
+            if (++byte_index == SCRATCHPAD_SIZE) {
+                finish_scratchpad(now);
             }
             break;
         case ePhasePause:

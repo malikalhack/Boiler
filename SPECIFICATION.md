@@ -240,25 +240,40 @@ pull-up or parasite-power conversion is implemented.
 
 Standard-speed slots use 6 us low for Write 1, 60 us for Write 0, and a
 3 us low followed by 8 us to the read sample. Slot duration is at least
-70 us. Reset uses at least 480 us low, a presence sample 70 us after release
-and at least 410 us recovery. Timer0 is dedicated to the long Reset phases
-in CTC mode with a /64 clock. Compare thresholds are 112 and 96; rounding
+70 us. Reset uses at least 480 us low, a presence sample within the guaranteed
+60..75 us overlap after release and at least 410 us recovery. Timer0 is
+dedicated to 1-Wire in CTC mode: /64 for Reset low/recovery and /8 for presence
+and bit slots. Long-phase compare thresholds remain 112 and 96; rounding
 and one extra counter step cover the free-running prescaler's unknown phase.
 The shared Timer0/Timer1 prescaler is never reset, and Timer1 still supplies
 the approximately 1 ms system tick. OC0 is disconnected from GPIO.
 
-Reset starts with Busy and returns control to the scheduler. Its first
-Timer0 interrupt releases PD2 and retains the verified 70 us software
-presence wait; the second checks recovery and stops Timer0. Repeated polls
-do not restart an active pulse. The completed result is consumed once.
-All discovery, device-selection and conversion Reset states wait on Busy
-without sending bits or publishing an acquisition error.
-Initialization cancels any pending Reset and releases PD2.
+Reset starts with Busy and returns control to the scheduler. Its three
+Timer0 interrupts release PD2, sample presence and finish recovery.
+Presence uses a 62 us timer wait (compare 116 at /8), leaving room for
+register setup, interrupt entry, foreground polling and the Timer1 ISR.
+The compiled timing budget and all shared-clock phases are tested against
+the actual 60..75 us sampling window, including minimum-length presence.
+This budget assumes the current interrupt handlers and startup-only task
+registration. CPU clock changes, new interrupt handlers or longer masked
+regions require timing revalidation.
 
-Bit slots still mask their critical low/sample intervals and preserve the
-incoming interrupt state. The presence ISR occupies about 75 us including
-overhead; byte transfers remain synchronous within their task invocation.
-Byte transfers and search triplets are spread over cooperative invocations.
+Bits, bytes and search triplets also use start/poll with Busy. Repeated
+polls do not restart pulses or resend data; outputs change only on Ok.
+Timer0 advances all eight byte slots, or both search reads and the chosen
+branch, independently of millisecond task calls. A search collision uses
+the preferred branch; both reads high report a bus fault without a write.
+Idle/recovery low faults stop transfers and invalidate the acquisition.
+The completed result is consumed once. Reset can preempt an old transfer
+or its unconsumed result, allowing refresh to restart acquisition safely;
+an already pending Reset is retained. Initialization cancels all bus work.
+
+Only the 6 us Write 1 pulse and the 3+8 us read-sample interval retain
+software delays, with interrupts masked and the incoming state preserved.
+Write 0 low (60 us), write/read recovery (10/64/59 us), and presence waiting
+are timer-driven. A task starts at most one slot's short critical interval;
+subsequent byte/triplet slots start in Timer0 interrupts. No whole byte
+or presence wait blocks a task or ISR.
 Actual line rise time and display smoothness require board verification.
 Protocol and timing reference:
 [DS18B20 data sheet](https://www.analog.com/media/en/technical-documentation/data-sheets/DS18B20.pdf).
@@ -302,8 +317,10 @@ Any failure disables both heater outputs.
 ### 3.1. DS18B20 Backend
 
 Firmware uses real sensors through software 1-Wire. A task polled
-each tick performs at most one reset, one byte, or one Search ROM triplet
-per invocation. Discovery handles ROM collisions and validates Dallas CRC-8,
+each tick starts or consumes at most one Reset, bit, byte or Search ROM
+triplet per invocation. Byte/address indices and protocol phases advance
+only after successful completion. Discovery handles ROM collisions and
+validates Dallas CRC-8,
 with a capacity of two devices; further branches produce E006.
 
 Initialization completes before the polling task is registered; update and
@@ -322,7 +339,10 @@ command or sensor EEPROM write is performed; setup is checked every scan.
 
 Only after all devices pass setup does a broadcast Convert T start conversion.
 The task waits at least 750 ticks without blocking, checks completion through
-read slots and reports E008 if still busy at 800 ticks. Readings are checked
+read slots and reports E008 for a busy sample started at or after 800 ticks.
+Completion consumes the latched bit; a sample started before the deadline
+cannot become a timeout merely because its result was polled later.
+Readings are checked
 against -55..125 C and accepted only after the entire nine-byte scratchpad
 passes CRC and confirms 12-bit configuration.
 All-zero data is rejected even though its CRC is zero. Power-on +85 C is
@@ -336,7 +356,8 @@ An initial acquisition or explicit service refresh reports Busy, not a
 synthetic temperature or an application error. The initial display is
 dashes for a valid configuration until the first result; E001 still takes
 precedence for invalid assignments. After each result a 100 ms pause precedes
-the next scan; normal updates take approximately one second.
+the next scan; normal updates take approximately one second for one device.
+Additional devices and resolution upgrades take longer.
 
 Empty-bus discovery produces a zero-device snapshot and the assigned-sensor
 diagnostic E002/E003. Unknown ROMs produce E004 through the existing profile
@@ -345,15 +366,15 @@ transactions, invalid scratchpads, unsupported parasite power and conversion
 timeouts produce E008. Acquisition retries automatically; recovery restores
 temperature, HL3 and steady HL7 without another beep. Heating stays disabled.
 
-Display scanning remains cooperative. Reset's long waits now yield to the
-scheduler, but its presence ISR still occupies about 75 us and a transferred
-byte occupies about 560 us of cooperative execution. Scanning can still be
-delayed despite enabled interrupts between critical bit intervals.
+Display scanning remains cooperative. All long 1-Wire waits and multi-slot
+transfers now yield to the scheduler, but short critical intervals and
+Timer0 interrupt overhead can still delay scanning.
 Task priorities cannot preempt an already running bus operation. Two sensors
 add more addressed transfers, not twice the duration of one reset or byte.
-Board testing confirmed occasional subtle display jitter before this mixed
-timer/software revision. Its effect on jitter still needs board verification;
-fully asynchronous bit/byte timing remains future work.
+Board testing confirmed acquisition after the first mixed Reset stage;
+display jitter remained, without a quantified change. The second mixed
+bit/byte stage still needs board verification. Removing the remaining short
+software delays is future work.
 Scanning has not been moved to an interrupt.
 Digit switching must remain in the display module as a scheduler task.
 BSP only writes GPIO; scan frequency is controlled by the scheduler period,
