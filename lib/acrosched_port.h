@@ -1,13 +1,15 @@
 /**
+ * @copyright 2021 Anthony Chernov
+ * Licensed under the MIT License; see LICENSE in the project root.
  * @file    acrosched_port.h
- * @version 2.2.0
+ * @version 2.7.1
  * @authors Anton Chernov
  * @date    2026-05-14
  * @date    @showdate "%Y-%m-%d"
  */
 
-#ifndef ACROSCHED_PORT_H_
-#define ACROSCHED_PORT_H_
+#ifndef ACROSCHED_PORT_H
+#define ACROSCHED_PORT_H
 
 /******************************** Included files ******************************/
 #include <avr/io.h>
@@ -41,7 +43,7 @@
 /**
  * @def ACROSCHED_EXIT_CRITICAL
  * @brief Restore the SREG (and thus the I-flag) saved by
- *        ACROSCHED_ENTER_CRITICAL().
+ * ACROSCHED_ENTER_CRITICAL().
  */
 #define ACROSCHED_EXIT_CRITICAL()   (SREG = _acroSreg)
 
@@ -59,4 +61,4 @@
 #define ACROSCHED_WAIT_FOR_EVENT()  __asm__ __volatile__ ("sleep" : : : "memory")
 
 /******************************************************************************/
-#endif //! ACROSCHED_PORT_H_
+#endif // !ACROSCHED_PORT_H

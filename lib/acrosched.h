@@ -1,19 +1,19 @@
 /**
+ * @copyright 2021 Anthony Chernov
+ * Licensed under the MIT License; see LICENSE in the project root.
  * @file    acrosched.h
- * @version 2.2.0
+ * @version 2.7.1
  * @authors Anton Chernov
  * @date    2026-05-14
  * @date    @showdate "%Y-%m-%d"
  */
 
-#ifndef ACROSCHED_H_
-#define ACROSCHED_H_
-
+#ifndef ACROSCHED_H
+#define ACROSCHED_H
 /******************************** Included files ******************************/
 #include <stddef.h>
 #include <stdint.h>
 #include "acrosched_config.h"
-
 /********************************* Definitions ********************************/
 
 /**
@@ -58,7 +58,7 @@ typedef enum EAcroMode {
 /*----------------------------------------------------------------------------*/
 
 /** @brief Generic parameter pointer passed to task functions. */
-typedef void * AcroParam_t;
+typedef void *AcroParam_t;
 
 /** @brief Task function signature. */
 typedef void AcroTask_t(AcroParam_t);
@@ -108,14 +108,23 @@ EAcroStatus_t acroRun(void);
 
 /**
  * @brief Adds a task to the scheduler pool.
- * @param[in] dscr     - user-defined task descriptor.
+ * @details Descriptors must be unique among registered tasks. A duplicate
+ * returns eAcroInvalidParam without changing the pool, even when it is full.
+ * After removal the descriptor may be registered again. In a preemptive build
+ * with a non-empty ACROSCHED_TASK_STACK_SIZES map, an unlisted descriptor also
+ * returns eAcroInvalidParam before registration.
+ * With preemptive stack diagnostics enabled, returns eAcroError without
+ * registering if the assigned ID or stack still belongs to the executing
+ * task after its removal. Retry after a context switch.
+ * @param[in] dscr     - non-zero user-defined task descriptor; zero returns
+ * eAcroInvalidParam without changing the pool or assigning an ID.
  * @param[in] pFunc    - pointer to the task function (must not be NULL).
  * @param[in] pParams  - argument passed to the task function (may be NULL).
  * @param[in] mode     - initial execution mode (@ref EAcroMode_t).
  * @param[in] runTime  - period or timeout in system ticks.
  * @param[in] priority - dispatch priority; higher value means earlier
- *                       dispatch. Equal-priority tasks are dispatched in
- *                       registration order. Use 0 for round-robin behaviour.
+ * dispatch. Equal-priority tasks are dispatched in
+ * registration order. Use 0 for round-robin behaviour.
  * @returns Operation status.
  * @acrostdreturns
  */
@@ -130,14 +139,23 @@ EAcroStatus_t acroAddTask(
 
 /**
  * @brief Adds a task to the pool with an initial start delay.
- * @param[in] dscr     - user-defined task descriptor.
+ * @details Descriptors must be unique among registered tasks. A duplicate
+ * returns eAcroInvalidParam without changing the pool, even when it is full.
+ * After removal the descriptor may be registered again. In a preemptive build
+ * with a non-empty ACROSCHED_TASK_STACK_SIZES map, an unlisted descriptor also
+ * returns eAcroInvalidParam before registration.
+ * With preemptive stack diagnostics enabled, returns eAcroError without
+ * registering if the assigned ID or stack still belongs to the executing
+ * task after its removal. Retry after a context switch.
+ * @param[in] dscr     - non-zero user-defined task descriptor; zero returns
+ * eAcroInvalidParam without changing the pool or assigning an ID.
  * @param[in] pFunc    - pointer to the task function (must not be NULL).
  * @param[in] pParams  - argument passed to the task function (may be NULL).
  * @param[in] mode     - execution mode after the delay expires.
  * @param[in] runTime  - period or timeout in system ticks.
  * @param[in] delay    - initial standby duration in system ticks.
  * @param[in] priority - dispatch priority; higher value means earlier
- *                       dispatch. Use 0 for round-robin behaviour.
+ * dispatch. Use 0 for round-robin behaviour.
  * @returns Operation status.
  * @acrostdreturns
  */
@@ -284,7 +302,7 @@ void acroErrorHook(EAcroStatus_t status);
 
 /**
  * @brief Diagnostic hook called when a task cannot be added because the pool
- *        is full.
+ * is full.
  * @details Weak no-op default. The pool layer calls this hook whenever
  * acroAddTask() or acroAddTaskWithDelay() is rejected with eAcroFull. The hook
  * runs after the critical section has been left. Override this function in the
@@ -364,7 +382,7 @@ EAcroStatus_t acroGetTaskDispatchCount(uint8_t id, AcroDispatchCount_t *pCount);
  */
 AcroDispatchCount_t acroGetIterationCount(void);
 
-#endif /* ACROSCHED_USE_STATISTICS */
+#endif // ACROSCHED_USE_STATISTICS
 
 /******************************************************************************/
-#endif //! ACROSCHED_H_
+#endif // !ACROSCHED_H

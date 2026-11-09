@@ -1,13 +1,15 @@
 /**
+ * @copyright 2021 Anthony Chernov
+ * Licensed under the MIT License; see LICENSE in the project root.
  * @file    acrosched_config.h
- * @version 2.2.0
+ * @version 2.7.1
  * @authors Anton Chernov
  * @date    2026-05-14
  * @date    @showdate "%Y-%m-%d"
  */
 
-#ifndef ACROSCHED_CONFIG_H_
-#define ACROSCHED_CONFIG_H_
+#ifndef ACROSCHED_CONFIG_H
+#define ACROSCHED_CONFIG_H
 
 /******************************** Included files ******************************/
 #include "acrosched_port.h"
@@ -24,13 +26,13 @@
  * @def ACROSCHED_VERSION_MINOR
  * @brief Minor version number of AcroSched (backwards-compatible additions).
  */
-#define ACROSCHED_VERSION_MINOR     2
+#define ACROSCHED_VERSION_MINOR     7
 
 /**
  * @def ACROSCHED_VERSION_PATCH
  * @brief Patch version number of AcroSched (backwards-compatible bug fixes).
  */
-#define ACROSCHED_VERSION_PATCH     0
+#define ACROSCHED_VERSION_PATCH     1
 
 /**
  * @def ACROSCHED_VERSION_STRING
@@ -51,6 +53,7 @@
  * @def ACROSCHED_MAX_TASKS
  * @brief Maximum number of tasks in the static task pool.
  * @details Defines the capacity of the statically allocated task array.
+ * Default: 5 tasks.
  * Increase to support more concurrent tasks at the cost of RAM; decrease on
  * severely RAM-constrained targets (for example MSP430 with 256 bytes of RAM).
  * The pool dominates the static RAM footprint, so each unit costs one
@@ -99,6 +102,18 @@
 #ifndef ACROSCHED_USE_IPC
 #define ACROSCHED_USE_IPC           0
 #endif /* ACROSCHED_USE_IPC */
+
+/**
+ * @def ACROSCHED_USE_MEMPOOL
+ * @brief Enable (1) or disable (0) the static fixed-block memory pool.
+ * @details The application supplies the pool object and backing storage.
+ * Allocation and release are non-blocking and ISR-safe. Available with either
+ * kernel, without dependencies on other optional modules. When disabled,
+ * the module contributes zero code size and zero RAM.
+ */
+#ifndef ACROSCHED_USE_MEMPOOL
+#define ACROSCHED_USE_MEMPOOL       0
+#endif /* ACROSCHED_USE_MEMPOOL */
 
 /**
  * @def ACROSCHED_USE_HOOKS
@@ -214,16 +229,69 @@
 
 /**
  * @def ACROSCHED_STACK_SIZE
- * @brief Size, in machine words, of each private task stack (preemptive only).
- * @details A single value applies to every task and to the built-in idle task.
- * One word equals sizeof(void *) - 4 bytes on a 32-bit core such as Cortex-M.
- * The default of 64 words (256 bytes on a 32-bit target) suits shallow task
+ * @brief Size, in port-defined stack words, of each private task stack.
+ * @details Applies to every registered task unless ACROSCHED_TASK_STACK_SIZES
+ * supplies individual slot sizes. The built-in idle task uses
+ * ACROSCHED_IDLE_STACK_SIZE, which defaults to this value.
+ * The port defines the word type and alignment. The default of 64 words
+ * (256 bytes on Cortex-M) suits shallow task
  * bodies; raise it for tasks that use deep call chains, large local buffers or
- * floating-point context. Used only when ACROSCHED_USE_PREEMPT is 1.
+ * floating-point context. Allocated sizes are rounded up to the port alignment.
+ * Used only when ACROSCHED_USE_PREEMPT is 1.
  */
 #ifndef ACROSCHED_STACK_SIZE
 #define ACROSCHED_STACK_SIZE        64U
 #endif /* ACROSCHED_STACK_SIZE */
+
+/**
+ * @def ACROSCHED_IDLE_STACK_SIZE
+ * @brief Built-in idle stack size in port-defined words (preemptive only).
+ * @details Defaults to ACROSCHED_STACK_SIZE for compatibility. May be reduced
+ * independently of task stacks after checking the idle path's worst-case
+ * usage, port context frame and alignment requirements. The allocated size is
+ * rounded up to port alignment. Automatic stack
+ * sizing is not provided. Ignored by the cooperative kernel.
+ */
+#ifndef ACROSCHED_IDLE_STACK_SIZE
+#define ACROSCHED_IDLE_STACK_SIZE   ACROSCHED_STACK_SIZE
+#endif /* ACROSCHED_IDLE_STACK_SIZE */
+
+/**
+ * @def ACROSCHED_TASK_STACK_SIZES
+ * @brief Optional compile-time list of task-stack sizes by descriptor.
+ * @details Empty by default: all task stacks use ACROSCHED_STACK_SIZE.
+ * To override, define ACROSCHED_TASK_STACK_SIZES(APPLY) as a sequence such as
+ * APPLY(1U, 128U) APPLY(2U, 64U). Each descriptor is a unique uint8_t constant;
+ * each size is a positive integer constant in port-defined stack words,
+ * rounded up for port alignment. The list may describe more or fewer
+ * tasks than ACROSCHED_MAX_TASKS; that macro still limits simultaneous tasks.
+ * With a non-empty list, registration rejects unlisted descriptors with
+ * eAcroInvalidParam. Re-registration retains the descriptor's stack budget
+ * regardless of runtime ID, function, priority or pool position.
+ * No heap is used. Ignored by the cooperative kernel. Idle sizing is separate.
+ */
+#ifndef ACROSCHED_TASK_STACK_SIZES
+#define ACROSCHED_TASK_STACK_SIZES(APPLY)
+#endif /* ACROSCHED_TASK_STACK_SIZES */
+
+/**
+ * @def ACROSCHED_USE_STACK_WATERMARK
+ * @brief Enable read-only task stack high-water measurements.
+ * @details Requires the preemptive kernel. Stacks are painted at registration;
+ * the getter reports untouched port-defined stack words. Disabled by default.
+ */
+#ifndef ACROSCHED_USE_STACK_WATERMARK
+#define ACROSCHED_USE_STACK_WATERMARK 0
+#endif /* ACROSCHED_USE_STACK_WATERMARK */
+
+/**
+ * @def ACROSCHED_USE_STACK_CHECK
+ * @brief Enable outgoing stack overflow diagnostics and hook.
+ * @details Requires the preemptive kernel. Independent of stack watermark.
+ */
+#ifndef ACROSCHED_USE_STACK_CHECK
+#define ACROSCHED_USE_STACK_CHECK 0
+#endif /* ACROSCHED_USE_STACK_CHECK */
 
 /**
  * @def ACROSCHED_USE_SEM
@@ -238,6 +306,44 @@
 #ifndef ACROSCHED_USE_SEM
 #define ACROSCHED_USE_SEM           0
 #endif /* ACROSCHED_USE_SEM */
+
+/**
+ * @def ACROSCHED_USE_NOTIFY
+ * @brief Enable (1) or disable (0) direct-to-task notifications.
+ * @details When enabled with the preemptive kernel, acroNotify() can signal
+ * a task by its registered descriptor from task or interrupt context, and
+ * acroNotifyWait() can block a task until it receives a signal. Notifications
+ * do not depend on semaphores. When disabled, the API and per-task state are
+ * omitted. Requires ACROSCHED_USE_PREEMPT == 1.
+ */
+#ifndef ACROSCHED_USE_NOTIFY
+#define ACROSCHED_USE_NOTIFY        0
+#endif /* ACROSCHED_USE_NOTIFY */
+
+/**
+ * @def ACROSCHED_USE_QUEUE
+ * @brief Enable (1) or disable (0) the blocking FIFO message queue.
+ * @details Requires ACROSCHED_USE_PREEMPT == 1, but has no dependency on
+ * semaphores, mutexes or the cooperative IPC module. The application supplies
+ * the queue object and backing storage. Contributes zero code size when off.
+ */
+#ifndef ACROSCHED_USE_QUEUE
+#define ACROSCHED_USE_QUEUE         0
+#endif /* ACROSCHED_USE_QUEUE */
+
+/**
+ * @def ACROSCHED_USE_PREEMPT_EVENTS
+ * @brief Enable (1) or disable (0) the blocking event-flag wait.
+ * @details When enabled (only meaningful with the preemptive kernel),
+ * acroEventWaitBlocking() lets a task sleep until the requested bits of an
+ * IPC event group are signalled, under wait-any or wait-all semantics with a
+ * timeout. Extends the ISR-safe poll-mode event flags (ACROSCHED_USE_IPC),
+ * which are unchanged. When disabled, the feature contributes zero code size.
+ * Requires ACROSCHED_USE_IPC == 1 and ACROSCHED_USE_PREEMPT == 1.
+ */
+#ifndef ACROSCHED_USE_PREEMPT_EVENTS
+#define ACROSCHED_USE_PREEMPT_EVENTS 0
+#endif /* ACROSCHED_USE_PREEMPT_EVENTS */
 
 /**
  * @def ACROSCHED_USE_MUTEX
@@ -302,23 +408,19 @@
 /*----------------------------------------------------------------------------*/
 
 /**
- * @def ACROSCHED_USE_TICK_DOUBLE_READ
- * @brief Enable (1) or disable (0) the double-read consistency guard for the
- *        system tick.
- * @details getCurTime() reads the system tick twice and retries until two
- * consecutive reads agree, guaranteeing a torn-free snapshot on platforms
- * where reading AcroTick_t is not atomic - that is, where the type is wider
- * than the native machine word (for example uint16_t on 8-bit AVR, or
- * uint32_t on an 8/16-bit target).
- * When the tick read is naturally atomic (sizeof(AcroTick_t) does not exceed
- * the native word, for example uint32_t on Cortex-M or uint16_t on the 16-bit
- * MSP430), set this to 0 in the port header to perform a single read and save
- * a few cycles per call.
- * Default 1 (safe on every platform).
+ * @def ACROSCHED_TICK_READ_NEEDS_CRITICAL
+ * @brief Protect system-tick and software-timer tick reads with a critical
+ * section (1), or use a naturally atomic single read (0).
+ * @details Default 1, required for uint16_t on 8-bit AVR. The port must
+ * implement nesting-safe critical sections that save and restore the prior
+ * interrupt-enable state; the no-op defaults do not protect tick reads.
+ * Set to 0 in the port header only when reading AcroTick_t is naturally
+ * atomic with the required alignment (uint32_t on Cortex-M, uint16_t on
+ * MSP430). Reassess this setting if the tick type changes.
  */
-#ifndef ACROSCHED_USE_TICK_DOUBLE_READ
-#define ACROSCHED_USE_TICK_DOUBLE_READ  1
-#endif /* ACROSCHED_USE_TICK_DOUBLE_READ */
+#ifndef ACROSCHED_TICK_READ_NEEDS_CRITICAL
+#define ACROSCHED_TICK_READ_NEEDS_CRITICAL  1
+#endif /* ACROSCHED_TICK_READ_NEEDS_CRITICAL */
 
 /*----------------------------------------------------------------------------*/
 
@@ -333,20 +435,20 @@
  * PRIMASK on Cortex-M, SREG on ATmega, or SR on MSP430).
  *
  * @note Usage rule (the saved-state variable is per-function, on the stack):
- *       declare it exactly once per function and pair it with exactly one
- *       ACROSCHED_ENTER_CRITICAL() / ACROSCHED_EXIT_CRITICAL() region.
- *       - Sequential (non-overlapping) regions in one function are fine: the
- *         variable is simply reused.
- *       - Do NOT nest two ENTER/EXIT pairs that share the same declared
- *         variable in a single scope: the inner ENTER overwrites the saved
- *         state and the outer EXIT then restores the wrong value (interrupts
- *         may stay disabled). The compiler already rejects a second
- *         ACROSCHED_DECLARE_CRITICAL() in the same scope (redefinition).
- *       - If a region must genuinely be nested, give the inner region its own
- *         scope (a nested { } block with its own ACROSCHED_DECLARE_CRITICAL())
- *         or, preferably, use the ACROSCHED_CRITICAL() wrapper below, which
- *         creates that scope for you. Nesting across function calls is always
- *         safe because each function owns its variable.
+ * declare it exactly once per function and pair it with exactly one
+ * ACROSCHED_ENTER_CRITICAL() / ACROSCHED_EXIT_CRITICAL() region.
+ * - Sequential (non-overlapping) regions in one function are fine: the
+ * variable is simply reused.
+ * - Do NOT nest two ENTER/EXIT pairs that share the same declared
+ * variable in a single scope: the inner ENTER overwrites the saved
+ * state and the outer EXIT then restores the wrong value (interrupts
+ * may stay disabled). The compiler already rejects a second
+ * ACROSCHED_DECLARE_CRITICAL() in the same scope (redefinition).
+ * - If a region must genuinely be nested, give the inner region its own
+ * scope (a nested { } block with its own ACROSCHED_DECLARE_CRITICAL())
+ * or, preferably, use the ACROSCHED_CRITICAL() wrapper below, which
+ * creates that scope for you. Nesting across function calls is always
+ * safe because each function owns its variable.
  */
 #ifndef ACROSCHED_DECLARE_CRITICAL
 #define ACROSCHED_DECLARE_CRITICAL()  /* no-op */
@@ -355,7 +457,7 @@
 /**
  * @def ACROSCHED_ENTER_CRITICAL
  * @brief Enter a critical section: save the current interrupt-enable state,
- *        then disable interrupts.
+ * then disable interrupts.
  * @details No-op default. Override this macro in the port header
  * (acrosched_port.h) to provide a platform-specific, nesting-safe
  * implementation that saves the prior state into the variable declared by
@@ -364,9 +466,9 @@
  * until the outermost exit and never re-enable interrupts that were already
  * disabled on entry.
  * Example (Cortex-M):
- *   @code _acroPriMask = __get_PRIMASK(); __disable_irq(); @endcode
+ * @code _acroPriMask = __get_PRIMASK(); __disable_irq(); @endcode
  * Example (ATmega):
- *   @code _acroSreg = SREG; cli(); @endcode
+ * @code _acroSreg = SREG; cli(); @endcode
  */
 #ifndef ACROSCHED_ENTER_CRITICAL
 #define ACROSCHED_ENTER_CRITICAL()  /* no-op */
@@ -375,15 +477,15 @@
 /**
  * @def ACROSCHED_EXIT_CRITICAL
  * @brief Exit a critical section: restore the interrupt-enable state saved by
- *        ACROSCHED_ENTER_CRITICAL().
+ * ACROSCHED_ENTER_CRITICAL().
  * @details No-op default. Override this macro in the port header
  * (acrosched_port.h) to provide a platform-specific implementation that
  * restores the state held by ACROSCHED_DECLARE_CRITICAL() rather than
  * unconditionally re-enabling interrupts.
  * Example (Cortex-M):
- *   @code __set_PRIMASK(_acroPriMask) @endcode
+ * @code __set_PRIMASK(_acroPriMask) @endcode
  * Example (ATmega):
- *   @code SREG = _acroSreg @endcode
+ * @code SREG = _acroSreg @endcode
  */
 #ifndef ACROSCHED_EXIT_CRITICAL
 #define ACROSCHED_EXIT_CRITICAL()   /* no-op */
@@ -397,10 +499,10 @@
  * self-contained scope. Because the saved-state variable is declared inside
  * the wrapper's own block, every invocation gets its own storage; this makes
  * the wrapper a footgun-safe alternative to the three separate macros:
- *   - the matching EXIT can never be forgotten;
- *   - nesting (directly or through nested blocks) is always correct, since
- *     each level owns a distinct saved-state variable rather than clobbering
- *     a shared one.
+ * - the matching EXIT can never be forgotten;
+ * - nesting (directly or through nested blocks) is always correct, since
+ * each level owns a distinct saved-state variable rather than clobbering
+ * a shared one.
  * Prefer this form wherever the protected region is a simple statement block.
  * The three lower-level macros remain available for the rare cases that need
  * the enter and exit points in different scopes (for example a region whose
@@ -409,15 +511,15 @@
  * @param statements - one or more C statements to run with interrupts disabled.
  *
  * @warning Do not transfer control out of the block (return, break, continue,
- *          goto): that bypasses ACROSCHED_EXIT_CRITICAL() and leaves the saved
- *          interrupt state unrestored.
+ * goto): that bypasses ACROSCHED_EXIT_CRITICAL() and leaves the saved
+ * interrupt state unrestored.
  *
  * Example:
- *   @code
- *   ACROSCHED_CRITICAL(
- *       shared_flags |= bit;
- *   );
- *   @endcode
+ * @code
+ * ACROSCHED_CRITICAL(
+ * shared_flags |= bit;
+ * );
+ * @endcode
  */
 #ifndef ACROSCHED_CRITICAL
 #define ACROSCHED_CRITICAL(statements)  \
@@ -440,9 +542,9 @@
  * core can sleep until woken by an interrupt (for example the system tick).
  * Override this macro in the port header (acrosched_port.h) with the
  * platform's wait-for-event primitive:
- *   @code __WFI();      // Cortex-M  @endcode
- *   @code sleep_cpu();  // ATmega    @endcode
- *   @code LPM0;         // MSP430    @endcode
+ * @code __WFI();      // Cortex-M  @endcode
+ * @code sleep_cpu();  // ATmega    @endcode
+ * @code LPM0;         // MSP430    @endcode
  * A tickless port may instead read acroTimeToNextEvent() here, reprogram a
  * low-power wake timer and enter a deeper sleep mode, advancing the tick
  * counter by the elapsed time on wake-up.
@@ -459,6 +561,10 @@
 #error "ACROSCHED_MAX_TASKS must be greater than 0."
 #endif /* ACROSCHED_MAX_TASKS < 1 */
 
+#if (ACROSCHED_MAX_TASKS > 254U)
+#error "ACROSCHED_MAX_TASKS must not exceed 254; task IDs use uint8_t."
+#endif /* ACROSCHED_MAX_TASKS > 254U */
+
 #if (ACROSCHED_USE_TIMERS == 1)
 #if (ACROSCHED_MAX_TIMERS < 1)
 #error "ACROSCHED_MAX_TIMERS must be greater than 0 when ACROSCHED_USE_TIMERS == 1."
@@ -466,20 +572,73 @@
 #endif /* ACROSCHED_USE_TIMERS == 1 */
 
 #if (ACROSCHED_USE_PREEMPT == 1)
-#if (ACROSCHED_STACK_SIZE < 32U)
-#error "ACROSCHED_STACK_SIZE must be at least 32 words for the preemptive kernel."
-#endif /* ACROSCHED_STACK_SIZE < 32U */
+#if !defined(ACROSCHED_STACK_WORD_TYPE)  || \
+    !defined(ACROSCHED_STACK_ALIGNMENT)  || \
+    !defined(ACROSCHED_STACK_GROWS_DOWN) || \
+    !defined(ACROSCHED_STACK_MIN_WORDS)
+#error "The preemptive port must define all stack parameters."
+#endif
+
+#if (ACROSCHED_STACK_ALIGNMENT < 1U) || \
+    ((ACROSCHED_STACK_ALIGNMENT & (ACROSCHED_STACK_ALIGNMENT - 1U)) != 0U)
+#error "ACROSCHED_STACK_ALIGNMENT must be a nonzero power of two."
+#endif
+
+#if (ACROSCHED_STACK_GROWS_DOWN != 0) && (ACROSCHED_STACK_GROWS_DOWN != 1)
+#error "ACROSCHED_STACK_GROWS_DOWN must be 0 or 1."
+#endif
+
+#if (ACROSCHED_STACK_MIN_WORDS < 1U)
+#error "ACROSCHED_STACK_MIN_WORDS must be greater than zero."
+#endif
+
+#if (ACROSCHED_STACK_SIZE < ACROSCHED_STACK_MIN_WORDS)
+#error "ACROSCHED_STACK_SIZE is smaller than the port minimum."
+#endif
+
+#if (ACROSCHED_IDLE_STACK_SIZE < 1U)
+#error "ACROSCHED_IDLE_STACK_SIZE must be greater than zero."
+#endif
 #endif /* ACROSCHED_USE_PREEMPT == 1 */
+
+#if (ACROSCHED_USE_STACK_WATERMARK == 1) && (ACROSCHED_USE_PREEMPT != 1)
+#error "ACROSCHED_USE_STACK_WATERMARK requires ACROSCHED_USE_PREEMPT = 1."
+#endif
+
+#if (ACROSCHED_USE_STACK_CHECK == 1) && (ACROSCHED_USE_PREEMPT != 1)
+#error "ACROSCHED_USE_STACK_CHECK requires ACROSCHED_USE_PREEMPT = 1."
+#endif
 
 #if (ACROSCHED_USE_SEM == 1)
 #if (ACROSCHED_USE_PREEMPT != 1)
-#error "ACROSCHED_USE_SEM requires the preemptive kernel (ACROSCHED_USE_PREEMPT == 1)."
+#error "ACROSCHED_USE_SEM requires ACROSCHED_USE_PREEMPT = 1."
 #endif /* ACROSCHED_USE_PREEMPT != 1 */
 #endif /* ACROSCHED_USE_SEM == 1 */
 
+#if (ACROSCHED_USE_NOTIFY == 1)
+#if (ACROSCHED_USE_PREEMPT != 1)
+#error "ACROSCHED_USE_NOTIFY requires ACROSCHED_USE_PREEMPT = 1."
+#endif /* ACROSCHED_USE_PREEMPT != 1 */
+#endif /* ACROSCHED_USE_NOTIFY == 1 */
+
+#if (ACROSCHED_USE_QUEUE == 1)
+#if (ACROSCHED_USE_PREEMPT != 1)
+#error "ACROSCHED_USE_QUEUE requires ACROSCHED_USE_PREEMPT = 1."
+#endif /* ACROSCHED_USE_PREEMPT != 1 */
+#endif /* ACROSCHED_USE_QUEUE == 1 */
+
+#if (ACROSCHED_USE_PREEMPT_EVENTS == 1)
+#if (ACROSCHED_USE_IPC != 1)
+#error "ACROSCHED_USE_PREEMPT_EVENTS requires ACROSCHED_USE_IPC = 1."
+#endif /* ACROSCHED_USE_IPC != 1 */
+#if (ACROSCHED_USE_PREEMPT != 1)
+#error "ACROSCHED_USE_PREEMPT_EVENTS requires ACROSCHED_USE_PREEMPT = 1."
+#endif /* ACROSCHED_USE_PREEMPT != 1 */
+#endif /* ACROSCHED_USE_PREEMPT_EVENTS == 1 */
+
 #if (ACROSCHED_USE_MUTEX == 1)
 #if (ACROSCHED_USE_SEM != 1)
-#error "ACROSCHED_USE_MUTEX requires the counting semaphore (ACROSCHED_USE_SEM == 1)."
+#error "ACROSCHED_USE_MUTEX requires ACROSCHED_USE_SEM = 1."
 #endif /* ACROSCHED_USE_SEM != 1 */
 #endif /* ACROSCHED_USE_MUTEX == 1 */
 
@@ -496,4 +655,4 @@
 #endif /* ACROSCHED_USE_PRIO_INHERIT == 1 */
 
 /******************************************************************************/
-#endif //! ACROSCHED_CONFIG_H_
+#endif // !ACROSCHED_CONFIG_H

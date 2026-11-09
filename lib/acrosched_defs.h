@@ -2,7 +2,7 @@
  * @copyright 2021 Anthony Chernov
  * Licensed under the MIT License; see LICENSE in the project root.
  * @file    acrosched_defs.h
- * @version 2.7.0
+ * @version 2.7.1
  * @authors Anton Chernov
  * @date    2026-05-14
  * @date    @showdate "%Y-%m-%d"
